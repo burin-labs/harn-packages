@@ -1,0 +1,222 @@
+version = 1
+
+[[package]]
+name = "@burin/harn-openapi"
+description = "Pure-Harn OpenAPI 3.1 parser and SDK codegen helpers."
+repository = "https://github.com/burin-labs/harn-openapi"
+license = "MIT OR Apache-2.0"
+harn = ">=0.8,<0.9"
+exports = ["default", "types"]
+docs_url = "https://github.com/burin-labs/harn-openapi#readme"
+provenance = "https://github.com/burin-labs/harn-openapi"
+
+[[package.version]]
+version = "0.1.1-rc.1"
+git = "https://github.com/burin-labs/harn-openapi"
+rev = "v0.1.1-rc.1"
+package = "harn-openapi"
+provenance = "https://github.com/burin-labs/harn-openapi/releases/tag/v0.1.1-rc.1"
+
+[[package]]
+name = "@burin/notion-sdk"
+description = "Typed Notion REST API SDK in pure Harn, generated via harn-openapi."
+repository = "https://github.com/burin-labs/notion-sdk-harn"
+license = "MIT OR Apache-2.0"
+harn = ">=0.8,<0.9"
+exports = ["default", "helpers"]
+docs_url = "https://github.com/burin-labs/notion-sdk-harn#readme"
+provenance = "https://github.com/burin-labs/notion-sdk-harn"
+
+[[package.version]]
+version = "0.1.0"
+git = "https://github.com/burin-labs/notion-sdk-harn"
+rev = "v0.1.0"
+package = "notion-sdk-harn"
+provenance = "https://github.com/burin-labs/notion-sdk-harn/releases/tag/v0.1.0"
+
+[[package]]
+name = "@burin/github-connector"
+description = "Pure-Harn GitHub App connector: webhooks, installation token rotation, REST/GraphQL dispatch."
+repository = "https://github.com/burin-labs/harn-github-connector"
+license = "MIT OR Apache-2.0"
+harn = ">=0.7,<0.8"
+exports = ["default"]
+connector_contract = "v1"
+docs_url = "https://docs.harnlang.com/connectors/github.html"
+provenance = "https://github.com/burin-labs/harn-github-connector"
+
+[[package.version]]
+version = "0.2.0"
+git = "https://github.com/burin-labs/harn-github-connector"
+rev = "v0.2.0"
+package = "harn-github-connector"
+provenance = "https://github.com/burin-labs/harn-github-connector/releases/tag/v0.2.0"
+
+[[package.version]]
+version = "0.3.0"
+git = "https://github.com/burin-labs/harn-github-connector"
+rev = "v0.3.0"
+package = "harn-github-connector"
+provenance = "https://github.com/burin-labs/harn-github-connector/releases/tag/v0.3.0"
+
+[[package]]
+name = "@burin/slack-connector"
+description = "Pure-Harn Slack Events API connector: signature verification, URL handshake, Web API dispatch."
+repository = "https://github.com/burin-labs/harn-slack-connector"
+license = "MIT OR Apache-2.0"
+harn = ">=0.7,<0.8"
+exports = ["default"]
+connector_contract = "v1"
+docs_url = "https://docs.harnlang.com/connectors/slack-events.html"
+provenance = "https://github.com/burin-labs/harn-slack-connector"
+
+[[package.version]]
+version = "0.0.0"
+git = "https://github.com/burin-labs/harn-slack-connector"
+branch = "main"
+package = "harn-slack-connector"
+provenance = "https://github.com/burin-labs/harn-slack-connector"
+
+[[package]]
+name = "@burin/linear-connector"
+description = "Pure-Harn Linear connector: webhook verification, replay-window enforcement, GraphQL dispatch."
+repository = "https://github.com/burin-labs/harn-linear-connector"
+license = "MIT OR Apache-2.0"
+harn = ">=0.7,<0.8"
+exports = ["default"]
+connector_contract = "v1"
+docs_url = "https://docs.harnlang.com/connectors/linear.html"
+provenance = "https://github.com/burin-labs/harn-linear-connector/releases/tag/v0.1.0"
+
+[[package.version]]
+version = "0.1.0"
+git = "https://github.com/burin-labs/harn-linear-connector"
+rev = "v0.1.0"
+package = "harn-linear-connector"
+provenance = "https://github.com/burin-labs/harn-linear-connector/releases/tag/v0.1.0"
+
+[[package]]
+name = "@burin/notion-connector"
+description = "Pure-Harn Notion trigger connector: webhooks, polling, and outbound API dispatch."
+repository = "https://github.com/burin-labs/harn-notion-connector"
+license = "MIT OR Apache-2.0"
+harn = ">=0.8,<0.9"
+exports = ["default"]
+connector_contract = "v1"
+docs_url = "https://docs.harnlang.com/connectors/notion.html"
+provenance = "https://github.com/burin-labs/harn-notion-connector"
+
+[[package.version]]
+version = "0.1.0"
+git = "https://github.com/burin-labs/harn-notion-connector"
+rev = "v0.1.0"
+package = "harn-notion-connector"
+provenance = "https://github.com/burin-labs/harn-notion-connector/releases/tag/v0.1.0"
+
+[[package]]
+name = "@burin/gitlab-connector"
+description = "Pure-Harn GitLab connector: webhooks, OAuth2 + PAT auth, REST/GraphQL dispatch."
+repository = "https://github.com/burin-labs/harn-gitlab-connector"
+license = "MIT OR Apache-2.0"
+harn = ">=0.7,<0.8"
+exports = ["default"]
+connector_contract = "v1"
+docs_url = "https://docs.harnlang.com/connectors/catalog.html"
+provenance = "https://github.com/burin-labs/harn-gitlab-connector"
+
+[[package.version]]
+version = "0.0.0"
+git = "https://github.com/burin-labs/harn-gitlab-connector"
+branch = "main"
+package = "harn-gitlab-connector"
+provenance = "https://github.com/burin-labs/harn-gitlab-connector"
+
+[[package]]
+name = "@burin/forgejo-connector"
+description = "Pure-Harn Forgejo connector: signed webhooks, self-hosted REST dispatch, and raw API helpers."
+repository = "https://github.com/burin-labs/harn-forgejo-connector"
+license = "MIT OR Apache-2.0"
+harn = ">=0.7,<0.8"
+exports = ["default"]
+connector_contract = "v1"
+docs_url = "https://docs.harnlang.com/connectors/catalog.html"
+provenance = "https://github.com/burin-labs/harn-forgejo-connector/releases/tag/v0.1.0"
+
+[[package.version]]
+version = "0.1.0"
+git = "https://github.com/burin-labs/harn-forgejo-connector"
+rev = "v0.1.0"
+package = "harn-forgejo-connector"
+provenance = "https://github.com/burin-labs/harn-forgejo-connector/releases/tag/v0.1.0"
+
+[[package]]
+name = "@burin/gitea-connector"
+description = "Pure-Harn Gitea connector: signed webhooks, self-hosted REST dispatch, and raw API helpers."
+repository = "https://github.com/burin-labs/harn-gitea-connector"
+license = "MIT OR Apache-2.0"
+harn = ">=0.7,<0.8"
+exports = ["default"]
+connector_contract = "v1"
+docs_url = "https://docs.harnlang.com/connectors/catalog.html"
+provenance = "https://github.com/burin-labs/harn-gitea-connector/releases/tag/v0.1.0"
+
+[[package.version]]
+version = "0.1.0"
+git = "https://github.com/burin-labs/harn-gitea-connector"
+rev = "v0.1.0"
+package = "harn-gitea-connector"
+provenance = "https://github.com/burin-labs/harn-gitea-connector/releases/tag/v0.1.0"
+
+[[package]]
+name = "@burin/bitbucket-connector"
+description = "Pure-Harn Bitbucket connector: Cloud/Data Center webhooks, HMAC verification, and REST dispatch."
+repository = "https://github.com/burin-labs/harn-bitbucket-connector"
+license = "MIT OR Apache-2.0"
+harn = ">=0.7,<0.8"
+exports = ["default"]
+connector_contract = "v1"
+docs_url = "https://docs.harnlang.com/connectors/catalog.html"
+provenance = "https://github.com/burin-labs/harn-bitbucket-connector/releases/tag/v0.1.0"
+
+[[package.version]]
+version = "0.1.0"
+git = "https://github.com/burin-labs/harn-bitbucket-connector"
+rev = "v0.1.0"
+package = "harn-bitbucket-connector"
+provenance = "https://github.com/burin-labs/harn-bitbucket-connector/releases/tag/v0.1.0"
+
+[[package]]
+name = "@burin/sourcehut-connector"
+description = "Pure-Harn SourceHut connector: Ed25519-signed webhooks plus GraphQL/REST passthrough helpers."
+repository = "https://github.com/burin-labs/harn-sourcehut-connector"
+license = "MIT OR Apache-2.0"
+harn = ">=0.7,<0.8"
+exports = ["default"]
+connector_contract = "v1"
+docs_url = "https://docs.harnlang.com/connectors/catalog.html"
+provenance = "https://github.com/burin-labs/harn-sourcehut-connector/releases/tag/v0.1.0"
+
+[[package.version]]
+version = "0.1.0"
+git = "https://github.com/burin-labs/harn-sourcehut-connector"
+rev = "v0.1.0"
+package = "harn-sourcehut-connector"
+provenance = "https://github.com/burin-labs/harn-sourcehut-connector/releases/tag/v0.1.0"
+
+[[package]]
+name = "@burin/svn-connector"
+description = "Pure-Harn Subversion connector: post-commit hook normalization and polling revision scanner surface."
+repository = "https://github.com/burin-labs/harn-svn-connector"
+license = "MIT OR Apache-2.0"
+harn = ">=0.7,<0.8"
+exports = ["default"]
+connector_contract = "v1"
+docs_url = "https://docs.harnlang.com/connectors/catalog.html"
+provenance = "https://github.com/burin-labs/harn-svn-connector/releases/tag/v0.1.0"
+
+[[package.version]]
+version = "0.1.0"
+git = "https://github.com/burin-labs/harn-svn-connector"
+rev = "v0.1.0"
+package = "harn-svn-connector"
+provenance = "https://github.com/burin-labs/harn-svn-connector/releases/tag/v0.1.0"
