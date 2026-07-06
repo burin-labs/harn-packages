@@ -10,9 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  id-token: write
-  pages: write
+  contents: write
 
 concurrency:
   group: pages
@@ -23,26 +21,30 @@ env:
 
 jobs:
   deploy:
-    name: Deploy Pages
+    name: Publish Pages branch
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Prepare registry site
+      - name: Publish package index to gh-pages
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          mkdir -p _site
-          cp harn-package-index.toml _site/harn-package-index.toml
-          cp CNAME _site/CNAME
-          cp .nojekyll _site/.nojekyll
-
-      - uses: actions/upload-pages-artifact@v4
-        with:
-          path: _site
-
-      - id: deployment
-        uses: actions/deploy-pages@v5
+          publish_dir="${RUNNER_TEMP}/harn-packages-pages"
+          rm -rf "${publish_dir}"
+          mkdir -p "${publish_dir}"
+          cp harn-package-index.toml "${publish_dir}/harn-package-index.toml"
+          cp CNAME "${publish_dir}/CNAME"
+          cp .nojekyll "${publish_dir}/.nojekyll"
+          git -C "${publish_dir}" init --initial-branch=gh-pages
+          git -C "${publish_dir}" config user.name "github-actions[bot]"
+          git -C "${publish_dir}" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "${publish_dir}" add .
+          git -C "${publish_dir}" commit -m "Deploy package index ${GITHUB_SHA}"
+          git -C "${publish_dir}" remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          auth_header="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
+          git -C "${publish_dir}" \
+            -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
+            push --force origin gh-pages
