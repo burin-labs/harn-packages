@@ -3,6 +3,10 @@ name: Deploy Pages
 on:
   push:
     branches: [main]
+    paths:
+      - "harn-package-index.toml"
+      - "CNAME"
+      - ".nojekyll"
   workflow_dispatch:
 
 permissions:
