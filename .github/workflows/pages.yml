@@ -11,7 +11,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
 
 concurrency:
   group: pages
@@ -49,4 +48,3 @@ jobs:
           git -C "${publish_dir}" \
             -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
             push --force origin gh-pages
-          gh api "repos/${GITHUB_REPOSITORY}/pages/builds" -X POST >/dev/null
