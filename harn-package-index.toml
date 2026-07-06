@@ -170,14 +170,21 @@ provenance = "https://github.com/burin-labs/harn-linear-connector"
 
 [[package]]
 name = "@burin/notion-connector"
-description = "Pure-Harn Notion trigger connector: webhooks, polling, and outbound API dispatch."
+description = "Pure-Harn Notion connector: webhooks, polling, artifact helpers, and outbound API dispatch."
 repository = "https://github.com/burin-labs/harn-notion-connector"
 license = "MIT OR Apache-2.0"
-harn = ">=0.8,<0.9"
+harn = ">=0.9,<0.10"
 exports = ["default"]
 connector_contract = "v1"
-docs_url = "https://docs.harnlang.com/connectors/notion.html"
-provenance = "https://github.com/burin-labs/harn-notion-connector"
+docs_url = "https://github.com/burin-labs/harn-notion-connector#readme"
+provenance = "https://github.com/burin-labs/harn-notion-connector/releases/tag/v0.1.1"
+
+[[package.version]]
+version = "0.1.1"
+git = "https://github.com/burin-labs/harn-notion-connector"
+rev = "v0.1.1"
+package = "harn-notion-connector"
+provenance = "https://github.com/burin-labs/harn-notion-connector/releases/tag/v0.1.1"
 
 [[package.version]]
 version = "0.1.0"
