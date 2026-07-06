@@ -259,6 +259,24 @@ package = "harn-box-connector"
 provenance = "https://github.com/burin-labs/harn-box-connector/releases/tag/v0.1.0"
 
 [[package]]
+name = "@burin/confluence-connector"
+description = "Pure-Harn Confluence connector: page artifacts, attachments, webhooks, polling, and outbound API dispatch."
+repository = "https://github.com/burin-labs/harn-confluence-connector"
+license = "MIT OR Apache-2.0"
+harn = ">=0.9,<0.10"
+exports = ["default"]
+connector_contract = "v1"
+docs_url = "https://github.com/burin-labs/harn-confluence-connector#readme"
+provenance = "https://github.com/burin-labs/harn-confluence-connector/releases/tag/v0.1.0"
+
+[[package.version]]
+version = "0.1.0"
+git = "https://github.com/burin-labs/harn-confluence-connector"
+rev = "v0.1.0"
+package = "harn-confluence-connector"
+provenance = "https://github.com/burin-labs/harn-confluence-connector/releases/tag/v0.1.0"
+
+[[package]]
 name = "@burin/buildkite-connector"
 description = "Pure-Harn Buildkite connector: signed webhooks, CI failure normalization, retry/rebuild + job logs."
 repository = "https://github.com/burin-labs/harn-buildkite-connector"
