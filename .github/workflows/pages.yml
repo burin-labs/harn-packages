@@ -36,9 +36,24 @@ jobs:
           cp CNAME _site/CNAME
           cp .nojekyll _site/.nojekyll
 
-      - uses: actions/upload-pages-artifact@v5
+      - name: Package registry site
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar \
+            --dereference \
+            --hard-dereference \
+            --directory _site \
+            -cvf "${RUNNER_TEMP}/artifact.tar" \
+            .
+          gzip -9 -n "${RUNNER_TEMP}/artifact.tar"
+
+      - uses: actions/upload-artifact@v6
         with:
-          path: _site
+          name: github-pages
+          path: ${{ runner.temp }}/artifact.tar.gz
+          if-no-files-found: error
+          retention-days: 1
 
       - id: deployment
         uses: actions/deploy-pages@v5
