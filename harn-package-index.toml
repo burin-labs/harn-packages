@@ -223,6 +223,24 @@ package = "harn-microsoft-365-connector"
 provenance = "https://github.com/burin-labs/harn-microsoft-365-connector/releases/tag/v0.1.0"
 
 [[package]]
+name = "@burin/dropbox-connector"
+description = "Pure-Harn Dropbox connector: file artifacts, webhooks, polling, and outbound API dispatch."
+repository = "https://github.com/burin-labs/harn-dropbox-connector"
+license = "MIT OR Apache-2.0"
+harn = ">=0.9,<0.10"
+exports = ["default"]
+connector_contract = "v1"
+docs_url = "https://github.com/burin-labs/harn-dropbox-connector#readme"
+provenance = "https://github.com/burin-labs/harn-dropbox-connector/releases/tag/v0.1.0"
+
+[[package.version]]
+version = "0.1.0"
+git = "https://github.com/burin-labs/harn-dropbox-connector"
+rev = "v0.1.0"
+package = "harn-dropbox-connector"
+provenance = "https://github.com/burin-labs/harn-dropbox-connector/releases/tag/v0.1.0"
+
+[[package]]
 name = "@burin/buildkite-connector"
 description = "Pure-Harn Buildkite connector: signed webhooks, CI failure normalization, retry/rebuild + job logs."
 repository = "https://github.com/burin-labs/harn-buildkite-connector"
