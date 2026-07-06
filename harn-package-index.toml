@@ -79,6 +79,13 @@ rev = "v0.1.4"
 package = "harn-documents"
 provenance = "https://github.com/burin-labs/harn-documents/releases/tag/v0.1.4"
 
+[[package.version]]
+version = "0.1.5"
+git = "https://github.com/burin-labs/harn-documents"
+rev = "v0.1.5"
+package = "harn-documents"
+provenance = "https://github.com/burin-labs/harn-documents/releases/tag/v0.1.5"
+
 [[package]]
 name = "@burin/github-connector"
 description = "Pure-Harn GitHub App connector: webhooks, installation token rotation, REST/GraphQL dispatch."
