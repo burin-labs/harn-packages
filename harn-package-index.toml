@@ -35,6 +35,51 @@ package = "notion-sdk-harn"
 provenance = "https://github.com/burin-labs/notion-sdk-harn/releases/tag/v0.1.0"
 
 [[package]]
+name = "@burin/documents"
+description = "Deterministic document report helpers, file artifact manifests, and Managed Agents artifact request helpers."
+repository = "https://github.com/burin-labs/harn-documents"
+license = "MIT OR Apache-2.0"
+harn = ">=0.9,<0.10"
+exports = ["lib"]
+docs_url = "https://github.com/burin-labs/harn-documents#readme"
+provenance = "https://github.com/burin-labs/harn-documents"
+
+[[package.version]]
+version = "0.1.0"
+git = "https://github.com/burin-labs/harn-documents"
+rev = "v0.1.0"
+package = "harn-documents"
+provenance = "https://github.com/burin-labs/harn-documents/releases/tag/v0.1.0"
+
+[[package.version]]
+version = "0.1.1"
+git = "https://github.com/burin-labs/harn-documents"
+rev = "v0.1.1"
+package = "harn-documents"
+provenance = "https://github.com/burin-labs/harn-documents/releases/tag/v0.1.1"
+
+[[package.version]]
+version = "0.1.2"
+git = "https://github.com/burin-labs/harn-documents"
+rev = "v0.1.2"
+package = "harn-documents"
+provenance = "https://github.com/burin-labs/harn-documents/releases/tag/v0.1.2"
+
+[[package.version]]
+version = "0.1.3"
+git = "https://github.com/burin-labs/harn-documents"
+rev = "v0.1.3"
+package = "harn-documents"
+provenance = "https://github.com/burin-labs/harn-documents/releases/tag/v0.1.3"
+
+[[package.version]]
+version = "0.1.4"
+git = "https://github.com/burin-labs/harn-documents"
+rev = "v0.1.4"
+package = "harn-documents"
+provenance = "https://github.com/burin-labs/harn-documents/releases/tag/v0.1.4"
+
+[[package]]
 name = "@burin/github-connector"
 description = "Pure-Harn GitHub App connector: webhooks, installation token rotation, REST/GraphQL dispatch."
 repository = "https://github.com/burin-labs/harn-github-connector"
@@ -126,13 +171,6 @@ git = "https://github.com/burin-labs/harn-notion-connector"
 rev = "v0.1.0"
 package = "harn-notion-connector"
 provenance = "https://github.com/burin-labs/harn-notion-connector/releases/tag/v0.1.0"
-
-[[package.version]]
-version = "0.1.0"
-git = "https://github.com/burin-labs/harn-notion-connector"
-branch = "main"
-package = "harn-notion-connector"
-provenance = "https://github.com/burin-labs/harn-notion-connector"
 
 [[package]]
 name = "@burin/buildkite-connector"

@@ -17,7 +17,7 @@ The `harn` CLI defaults to this URL — no configuration is needed:
 
 ```sh
 harn add @burin/notion-sdk@^0.1   # resolves against packages.harnlang.com
-harn search notion                # search the index
+harn package outdated             # compare registry pins with the index
 ```
 
 Override the index for a single command with `--registry <url|path>`, or set

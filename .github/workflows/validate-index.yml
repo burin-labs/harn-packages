@@ -1,0 +1,59 @@
+name: Validate index
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    name: CI status
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate package index
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > /tmp/harn-package-refs.tsv
+          import tomllib
+          from collections import Counter
+          from pathlib import Path
+
+          index = tomllib.loads(Path("harn-package-index.toml").read_text())
+          packages = index.get("package", [])
+          names = [package["name"] for package in packages]
+          duplicated_names = [name for name, count in Counter(names).items() if count > 1]
+          if duplicated_names:
+              raise SystemExit(f"duplicate package names: {', '.join(duplicated_names)}")
+
+          for package in packages:
+              versions = package.get("version", [])
+              version_names = [version["version"] for version in versions]
+              duplicated_versions = [
+                  version for version, count in Counter(version_names).items() if count > 1
+              ]
+              if duplicated_versions:
+                  package_name = package["name"]
+                  raise SystemExit(
+                      f"{package_name} declares duplicate versions: "
+                      + ", ".join(duplicated_versions)
+                  )
+              for version in versions:
+                  ref_keys = [key for key in ("rev", "branch") if key in version]
+                  if len(ref_keys) != 1:
+                      package_name = package["name"]
+                      version_name = version["version"]
+                      raise SystemExit(
+                          f"{package_name}@{version_name} must declare exactly one of rev or branch"
+                      )
+                  print(version["git"], ref_keys[0], version[ref_keys[0]], sep="\t")
+          PY
+
+          while IFS=$'\t' read -r remote kind ref; do
+            if [[ "${kind}" == "rev" ]]; then
+              git ls-remote --exit-code --tags "${remote}" "${ref}" >/dev/null
+            else
+              git ls-remote --exit-code --heads "${remote}" "${ref}" >/dev/null
+            fi
+          done < /tmp/harn-package-refs.tsv
