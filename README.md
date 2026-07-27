@@ -3,7 +3,7 @@
 This repository hosts the public package index for the
 [Harn](https://github.com/burin-labs/harn) ecosystem. The single source of
 truth is [`harn-package-index.toml`](./harn-package-index.toml), which lists
-every public `@burin/*` package and its immutable release or development refs.
+every public `@burin/*` package and its immutable releases.
 
 ## Canonical URL
 
@@ -27,16 +27,22 @@ Override the index for a single command with `--registry <url|path>`, or set
 
 Package authors publish with `harn publish`, which tags the package's own
 repository and opens a pull request against this repo to add the new version
-to `harn-package-index.toml`. Each entry points at a public, tagged Git
-release; this index stores metadata only, never package source or secrets.
+to `harn-package-index.toml`. Registry v2 binds each version to both its public
+tag and the full commit SHA resolved from that tag. The index stores metadata
+only, never package source or secrets.
 
 ## Validate an index change
 
 Run the same validator as CI before opening a pull request:
 
 ```sh
-python3 scripts/validate_index.py
+harn package registry verify harn-package-index.toml \
+  --remote \
+  --receipt-out registry-verification.json
 ```
 
-It checks package and version uniqueness, requires every version to use exactly
-one `rev` or `branch`, and resolves each declared remote reference.
+Use the Harn version pinned by [`.harn-version`](./.harn-version). The Harn
+verifier owns the registry contract: strict schema validation, package and
+version identity, provenance/repository coherence, immutable tag/commit
+binding, and remote resolution. CI publishes its structured verification
+receipt as an artifact.
