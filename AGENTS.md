@@ -12,22 +12,22 @@ credentials.
 - Before changing an entry, inspect the referenced package's exact
   `harn.toml`. Keep its package name, Harn compatibility range, exports, and
   release ref aligned with the published manifest.
-- A released version must use exactly one immutable `rev`, normally an
-  annotated release tag. Use a `branch` only for an intentionally unreleased
-  development record.
+- Every version must name its published `tag` and the full commit SHA that tag
+  resolves to in `rev`. Mutable branches and symbolic revisions are forbidden.
 - Keep `git`, `package`, and `provenance` links public and resolvable. Do not
   add local paths, credentials, access tokens, or source archives.
 
 ## Validation
 
-Run the same check as CI before committing an index change:
+Install the version pinned by `.harn-version`, then run the same Harn-owned
+check as CI before committing an index change:
 
 ```sh
-python3 scripts/validate_index.py
+harn package registry verify harn-package-index.toml --remote
 ```
 
-The script checks package/version uniqueness, requires exactly one `rev` or
-`branch` per version, and confirms every remote reference exists.
+The verifier owns registry-v2 structure, uniqueness, provenance/repository
+coherence, immutable tag/commit identity, and remote tag resolution.
 
 ## Pages
 
