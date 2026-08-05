@@ -198,6 +198,7 @@ tag = "v0.1.0"
 rev = "e2ce26549dd062006781f67fb4a4c31579eaac07"
 package = "harn-linear-connector"
 provenance = "https://github.com/burin-labs/harn-linear-connector/releases/tag/v0.1.0"
+yanked = true
 
 [[package]]
 name = "@burin/notion-connector"
