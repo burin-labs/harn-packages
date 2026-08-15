@@ -11,6 +11,13 @@ name: Reconcile index
 # `burin-labs/.github/.github/workflows/register-package-release.yml`, so a
 # release registers within minutes instead of waiting for the daily schedule.
 
+# The reason a run was requested is the only thing that distinguishes two
+# reconcile runs, and a caller that dispatched one has no other way to find it:
+# the dispatch API returns nothing identifying. Putting it in the run name makes
+# the run identifiable to a caller and readable to a human in the run list.
+run-name: >-
+  Reconcile index (${{ inputs.reason || github.event_name }})
+
 on:
   schedule:
     # Daily at 07:00 UTC.
