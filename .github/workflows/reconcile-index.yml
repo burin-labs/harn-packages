@@ -24,7 +24,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # `persist-credentials: false` is load-bearing, not hygiene. The default
+      # writes an `http.extraheader` into `.git/config` that points at a
+      # credentials file under RUNNER_TEMP. That path is outside the Harn
+      # sandbox's read roots, so every `git ls-remote` the reconciler runs from
+      # this directory dies with "bad config line 12 in file .git/config".
+      # This job only reads public repositories and pushes nothing.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install pinned Harn
         uses: burin-labs/harn/.github/actions/setup-harn@c86406a580b5a733a129a0c232e6d319a1745f23
