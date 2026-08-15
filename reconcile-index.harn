@@ -104,21 +104,28 @@ pub fn find_tag(tags: list, tag: string) -> UpstreamTag? {
  * read, so an unreachable repository is reported as unknown rather than
  * as drift.
  */
-fn fetch_manifest(net: HarnessNet, repository: string, tag: string) -> string? {
+fn fetch_manifest(process: HarnessProcess, repository: string, tag: string) -> string? {
   const slug = repo_slug(repository)
   if slug == nil {
     return nil
   }
   const url = "https://raw.githubusercontent.com/${slug}/${tag}/harn.toml"
-  const response = try {
-    net.request("GET", url, {timeout_ms: 30000})
-  } catch (error) {
+  // Fetched through a subprocess rather than `harness.net`, because the two
+  // are governed separately: `--allow-process-network` grants subprocess
+  // sockets while Harn's own egress stays fail-closed. Routing every network
+  // read through the same capability as `git ls-remote` keeps this runnable
+  // under the sandbox instead of needing `--no-sandbox`.
+  const result = process.run(
+    {
+      program: "curl",
+      args: ["--fail", "--silent", "--show-error", "--location", "--max-time", "30", url],
+      timeout_ms: 45000,
+    },
+  )
+  if result.exit_code != 0 {
     return nil
   }
-  if response.status != 200 {
-    return nil
-  }
-  return response.body
+  return result.stdout
 }
 
 /**
@@ -364,7 +371,7 @@ fn main(harness: Harness) {
     // 3. Package-level metadata should match the newest published manifest.
     const newest = newest_recorded(pkg.version)
     if newest != nil {
-      const manifest = fetch_manifest(harness.net, pkg.repository, newest.tag)
+      const manifest = fetch_manifest(harness.process, pkg.repository, newest.tag)
       if manifest == nil {
         findings = findings
           + [
