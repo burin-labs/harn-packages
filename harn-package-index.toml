@@ -52,6 +52,14 @@ rev = "f94d602557a6aae5a69a294a982333eedc7d5dc2"
 package = "notion-sdk-harn"
 provenance = "https://github.com/burin-labs/notion-sdk-harn/releases/tag/v0.1.1"
 
+[[package.version]]
+version = "0.2.0"
+git = "https://github.com/burin-labs/notion-sdk-harn"
+tag = "v0.2.0"
+rev = "4b4219a9b3b355b24dff842220854e8df3c2f061"
+package = "notion-sdk-harn"
+provenance = "https://github.com/burin-labs/notion-sdk-harn/releases/tag/v0.2.0"
+
 [[package]]
 name = "@burin/documents"
 description = "Deterministic document report helpers and file artifact references for Harn agents."
