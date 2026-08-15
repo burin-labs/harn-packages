@@ -1,0 +1,140 @@
+// Hermetic coverage for the reconciler's pure logic. No network, no
+// subprocesses: these are the parsers and comparators that decide whether a
+// finding is reported, so they are the parts worth pinning.
+import {
+  find_tag,
+  manifest_exports,
+  manifest_harn_range,
+  newest_recorded,
+  repo_slug,
+  same_names,
+  upsert_tag,
+  version_greater,
+} from "./reconcile-index.harn"
+
+const CONNECTOR_MANIFEST = """[package]
+name = "harn-box-connector"
+version = "0.1.0"
+harn = ">=0.9,<0.10"
+docs_url = "README.md"
+
+[exports]
+default = "src/lib.harn"
+helpers = "src/helpers.harn"
+
+[[providers]]
+id = "box"
+connector = { harn = "src/lib.harn" }
+"""
+
+@test
+pipeline test_harn_range_is_read_from_the_package_table() {
+  // `harn` is a key inside [package], and a later table reuses the name as an
+  // inline key (`connector = { harn = ... }`). Only the first may be read.
+  assert(manifest_harn_range(CONNECTOR_MANIFEST) == ">=0.9,<0.10")
+}
+
+@test
+pipeline test_harn_range_is_nil_when_absent() {
+  assert(manifest_harn_range("[package]\nname = \"x\"\n") == nil)
+}
+
+@test
+pipeline test_exports_are_the_keys_of_the_exports_table() {
+  const names = manifest_exports(CONNECTOR_MANIFEST)
+  assert(names != nil)
+  assert(same_names(names, ["default", "helpers"]))
+}
+
+@test
+pipeline test_exports_are_nil_when_the_table_is_absent() {
+  // Distinguishes "declares no exports" from "we could not tell", so a
+  // manifest without the table is never reported as drift.
+  assert(manifest_exports("[package]\nname = \"x\"\n") == nil)
+}
+
+@test
+pipeline test_name_sets_ignore_order_but_not_content() {
+  assert(same_names(["a", "b"], ["b", "a"]))
+  assert(!same_names(["a"], ["a", "b"]))
+  assert(!same_names(["a", "b"], ["a", "c"]))
+}
+
+@test
+pipeline test_versions_compare_numerically_not_lexically() {
+  // The bug this pins: "0.10.0" sorts below "0.9.0" as a string.
+  assert(version_greater("0.10.0", "0.9.0"))
+  assert(!version_greater("0.9.0", "0.10.0"))
+  assert(version_greater("0.8.3", "0.8.1"))
+  assert(!version_greater("0.2.0", "0.2.0"))
+}
+
+@test
+pipeline test_a_release_outranks_its_own_prerelease() {
+  assert(version_greater("0.1.1", "0.1.1-rc.2"))
+  assert(!version_greater("0.1.1-rc.2", "0.1.1"))
+  assert(version_greater("0.1.1-rc.2", "0.1.1-rc.1"))
+}
+
+@test
+pipeline test_newest_is_computed_not_taken_from_the_end() {
+  // Index records are not stored in version order. This is the exact shape
+  // that produced a false positive against @burin/slack-connector.
+  const records = [
+    {version: "0.2.1", tag: "v0.2.1", yanked: false},
+    {version: "0.2.0", tag: "v0.2.0", yanked: false},
+  ]
+  const newest = newest_recorded(records)
+  assert(newest != nil)
+  assert(newest.version == "0.2.1")
+}
+
+@test
+pipeline test_yanked_records_are_never_newest() {
+  const records = [
+    {version: "0.1.0", tag: "v0.1.0", yanked: false},
+    {version: "0.2.0", tag: "v0.2.0", yanked: true},
+  ]
+  const newest = newest_recorded(records)
+  assert(newest != nil)
+  assert(newest.version == "0.1.0")
+}
+
+@test
+pipeline test_an_all_yanked_package_has_no_newest() {
+  assert(newest_recorded([{version: "0.1.0", tag: "v0.1.0", yanked: true}]) == nil)
+}
+
+@test
+pipeline test_peeled_tag_shas_replace_the_annotated_object() {
+  // `git ls-remote` emits the tag object first and the peeled commit second.
+  // The index records the commit, so the later line has to win.
+  let tags = upsert_tag([], "v0.1.0", "annotated0000000000000000000000000000000")
+  tags = upsert_tag(tags, "v0.1.0", "commit111111111111111111111111111111111")
+  assert(tags.count == 1)
+  const found = find_tag(tags, "v0.1.0")
+  assert(found != nil)
+  assert(found.sha == "commit111111111111111111111111111111111")
+}
+
+@test
+pipeline test_unknown_tags_resolve_to_nil() {
+  assert(find_tag([], "v9.9.9") == nil)
+}
+
+@test
+pipeline test_repository_urls_reduce_to_owner_and_name() {
+  assert(
+    repo_slug("https://github.com/burin-labs/harn-box-connector")
+      == "burin-labs/harn-box-connector",
+  )
+  assert(
+    repo_slug("https://github.com/burin-labs/harn-box-connector.git")
+      == "burin-labs/harn-box-connector",
+  )
+  assert(
+    repo_slug("https://github.com/burin-labs/harn-box-connector/")
+      == "burin-labs/harn-box-connector",
+  )
+  assert(repo_slug("https://example.com/not-github") == nil)
+}

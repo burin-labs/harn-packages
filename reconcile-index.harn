@@ -1,0 +1,425 @@
+// Reconcile the published package index against upstream release tags.
+//
+// The index is hand-authored: nothing in this repo or in any package repo
+// watches upstream tags, so a release can land without ever reaching the
+// index (burin-labs/harn-github-connector#289). This script is the observer.
+//
+// It reads the registry through the Harn-owned parser rather than parsing
+// TOML here, so this file cannot drift from the format the verifier enforces.
+const INDEX_PATH = "harn-package-index.toml"
+
+const PEELED_SUFFIX = "^{}"
+
+const TAG_PREFIX = "refs/tags/"
+
+pub struct UpstreamTag {
+  tag: string
+  sha: string
+}
+
+struct Finding {
+  package: string
+  kind: string
+  detail: string
+}
+
+/** Read the index through `harn package search`, which owns registry parsing. */
+fn read_registry(process: HarnessProcess) -> list {
+  const result = process.run(
+    {program: "harn", args: ["package", "search", "--registry", INDEX_PATH, "--json"]},
+  )
+  if result.exit_code != 0 {
+    throw "harn package search failed (exit ${result.exit_code}): ${result.stderr}"
+  }
+  return json_parse(result.stdout)
+}
+
+/**
+ * Resolve every tag upstream. Annotated tags are recorded by the commit they
+ * peel to, matching the `rev` convention the index uses; a lightweight tag
+ * has no peeled line and its own object id is the commit.
+ */
+fn ls_remote_tags(process: HarnessProcess, repository: string) -> list {
+  const result = process.run(
+    {program: "git", args: ["ls-remote", "--tags", repository], timeout_ms: 60000},
+  )
+  if result.exit_code != 0 {
+    throw "git ls-remote failed for ${repository} (exit ${result.exit_code}): ${result.stderr}"
+  }
+  let resolved: list = []
+  for line in result.stdout.split("\n") {
+    const trimmed = line.trim()
+    if trimmed == "" {
+      continue
+    }
+    const parts = trimmed.split("\t")
+    if parts.count < 2 {
+      continue
+    }
+    const sha = parts[0]
+    const ref = parts[1]
+    if !ref.starts_with(TAG_PREFIX) {
+      continue
+    }
+    const name = substring(ref, TAG_PREFIX.count, ref.count)
+    if name.ends_with(PEELED_SUFFIX) {
+      // Peeled line wins over the annotated tag object recorded earlier.
+      const base = substring(name, 0, name.count - PEELED_SUFFIX.count)
+      resolved = upsert_tag(resolved, base, sha)
+    } else {
+      resolved = upsert_tag(resolved, name, sha)
+    }
+  }
+  return resolved
+}
+
+pub fn upsert_tag(tags: list, tag: string, sha: string) -> list {
+  let out: list = []
+  let replaced = false
+  for entry in tags {
+    if entry.tag == tag {
+      out = out + [UpstreamTag {tag: tag, sha: sha}]
+      replaced = true
+    } else {
+      out = out + [entry]
+    }
+  }
+  if !replaced {
+    out = out + [UpstreamTag {tag: tag, sha: sha}]
+  }
+  return out
+}
+
+pub fn find_tag(tags: list, tag: string) -> UpstreamTag? {
+  for entry in tags {
+    if entry.tag == tag {
+      return entry
+    }
+  }
+  return nil
+}
+
+/**
+ * Fetch a published `harn.toml`. Returns nil when the manifest cannot be
+ * read, so an unreachable repository is reported as unknown rather than
+ * as drift.
+ */
+fn fetch_manifest(net: HarnessNet, repository: string, tag: string) -> string? {
+  const slug = repo_slug(repository)
+  if slug == nil {
+    return nil
+  }
+  const url = "https://raw.githubusercontent.com/${slug}/${tag}/harn.toml"
+  const response = try {
+    net.request("GET", url, {timeout_ms: 30000})
+  } catch (error) {
+    return nil
+  }
+  if response.status != 200 {
+    return nil
+  }
+  return response.body
+}
+
+/**
+ * Read `harn` from the manifest's `[package]` table. The compatibility range
+ * is a key inside that table, not a top-level key, so the scan has to enter
+ * `[package]` and stop at the next table header.
+ */
+pub fn manifest_harn_range(manifest: string) -> string? {
+  let in_package = false
+  for line in manifest.split("\n") {
+    const trimmed = line.trim()
+    if trimmed.starts_with("[") {
+      in_package = trimmed == "[package]"
+      continue
+    }
+    if !in_package {
+      continue
+    }
+    if !trimmed.starts_with("harn") {
+      continue
+    }
+    const rest = substring(trimmed, 4, trimmed.count).trim()
+    if !rest.starts_with("=") {
+      continue
+    }
+    return unquote(substring(rest, 1, rest.count).trim())
+  }
+  return nil
+}
+
+/**
+ * Collect the export names a manifest publishes. `harn.toml` declares these
+ * as keys of an `[exports]` table (`default = "src/lib.harn"`), while the
+ * index records the same set as a list of names.
+ */
+pub fn manifest_exports(manifest: string) -> list? {
+  let in_exports = false
+  let seen = false
+  let names: list = []
+  for line in manifest.split("\n") {
+    const trimmed = line.trim()
+    if trimmed.starts_with("[") {
+      in_exports = trimmed == "[exports]"
+      if in_exports {
+        seen = true
+      }
+      continue
+    }
+    if !in_exports || trimmed == "" || trimmed.starts_with("#") {
+      continue
+    }
+    const eq = trimmed.index_of("=")
+    if eq <= 0 {
+      continue
+    }
+    names = names + [unquote(substring(trimmed, 0, eq).trim())]
+  }
+  if !seen {
+    return nil
+  }
+  return names
+}
+
+fn unquote(value: string) -> string {
+  if value.count >= 2 && value.starts_with("\"") && value.ends_with("\"") {
+    return substring(value, 1, value.count - 1)
+  }
+  return value
+}
+
+/** Compare two name lists as sets, so ordering differences are not drift. */
+pub fn same_names(left: list, right: list) -> bool {
+  if left.count != right.count {
+    return false
+  }
+  for name in left {
+    if !right.contains(name) {
+      return false
+    }
+  }
+  return true
+}
+
+pub fn repo_slug(repository: string) -> string? {
+  const marker = "github.com/"
+  if !repository.contains(marker) {
+    return nil
+  }
+  const idx = repository.index_of(marker)
+  if idx < 0 {
+    return nil
+  }
+  let slug = substring(repository, idx + marker.count, repository.count)
+  if slug.ends_with(".git") {
+    slug = substring(slug, 0, slug.count - 4)
+  }
+  if slug.ends_with("/") {
+    slug = substring(slug, 0, slug.count - 1)
+  }
+  if slug == "" {
+    return nil
+  }
+  return slug
+}
+
+fn render_names(names: list) -> string {
+  let parts: list = []
+  for item in names {
+    parts = parts + ["\"${item}\""]
+  }
+  return "[" + parts.join(", ") + "]"
+}
+
+/**
+ * Compare two semantic versions. Index records are not stored in version
+ * order, so "newest" has to be computed rather than read off the end of the
+ * list. A prerelease sorts below the release that shares its core.
+ */
+pub fn version_greater(left: string, right: string) -> bool {
+  const left_core = split_once(left, "-")
+  const right_core = split_once(right, "-")
+  const left_parts = left_core.head.split(".")
+  const right_parts = right_core.head.split(".")
+  let index = 0
+  while index < 3 {
+    const l = numeric_at(left_parts, index)
+    const r = numeric_at(right_parts, index)
+    if l != r {
+      return l > r
+    }
+    index = index + 1
+  }
+  // Equal cores: a release outranks any prerelease of the same core.
+  if left_core.tail == "" && right_core.tail != "" {
+    return true
+  }
+  if left_core.tail != "" && right_core.tail == "" {
+    return false
+  }
+  return left_core.tail > right_core.tail
+}
+
+struct SplitParts {
+  head: string
+  tail: string
+}
+
+fn split_once(value: string, separator: string) -> SplitParts {
+  const idx = value.index_of(separator)
+  if idx < 0 {
+    return SplitParts {head: value, tail: ""}
+  }
+  return SplitParts {
+    head: substring(value, 0, idx),
+    tail: substring(value, idx + separator.count, value.count),
+  }
+}
+
+fn numeric_at(parts: list, index: int) -> int {
+  if index >= parts.count {
+    return 0
+  }
+  return try {
+    to_int(parts[index])
+  } catch (error) {
+    0
+  }
+}
+
+pub fn newest_recorded(versions: list) -> dict? {
+  let newest: dict? = nil
+  for record in versions {
+    if record.yanked {
+      continue
+    }
+    if newest == nil || version_greater(record.version, newest.version) {
+      newest = record
+    }
+  }
+  return newest
+}
+
+fn main(harness: Harness) {
+  const packages = read_registry(harness.process)
+  harness.stdio.log("Reconciling ${packages.count} packages against upstream tags.")
+  let findings: list = []
+  let checked_tags = 0
+  let checked_manifests = 0
+  for pkg in packages {
+    const upstream = ls_remote_tags(harness.process, pkg.repository)
+    // 1. Every recorded version must still resolve to the commit it claims.
+    for record in pkg.version {
+      const found = find_tag(upstream, record.tag)
+      if found == nil {
+        findings = findings
+          + [
+          Finding {
+            package: pkg.name,
+            kind: "missing_upstream_tag",
+            detail:
+              "${record.version} records tag ${record.tag}, which does not exist in ${pkg.repository}",
+          },
+        ]
+        continue
+      }
+      checked_tags = checked_tags + 1
+      if found.sha != record.rev {
+        findings = findings
+          + [
+          Finding {
+            package: pkg.name,
+            kind: "rev_mismatch",
+            detail:
+              "${record.version} pins rev ${record.rev} but tag ${record.tag} now resolves to ${found.sha}",
+          },
+        ]
+      }
+    }
+    // 2. Every upstream release tag should appear in the index.
+    for entry in upstream {
+      if !entry.tag.starts_with("v") {
+        continue
+      }
+      const version = substring(entry.tag, 1, entry.tag.count)
+      let recorded = false
+      for record in pkg.version {
+        if record.version == version {
+          recorded = true
+        }
+      }
+      if !recorded {
+        findings = findings
+          + [
+          Finding {
+            package: pkg.name,
+            kind: "unrecorded_release",
+            detail:
+              "${pkg.repository} published ${entry.tag} (${entry.sha}) but the index has no ${version} record",
+          },
+        ]
+      }
+    }
+    // 3. Package-level metadata should match the newest published manifest.
+    const newest = newest_recorded(pkg.version)
+    if newest != nil {
+      const manifest = fetch_manifest(harness.net, pkg.repository, newest.tag)
+      if manifest == nil {
+        findings = findings
+          + [
+          Finding {
+            package: pkg.name,
+            kind: "manifest_unreadable",
+            detail:
+              "could not read harn.toml at ${newest.tag} from ${pkg.repository}; metadata was not checked",
+          },
+        ]
+      } else {
+        checked_manifests = checked_manifests + 1
+        const declared_harn = manifest_harn_range(manifest)
+        if declared_harn != nil && declared_harn != pkg.harn {
+          findings = findings
+            + [
+            Finding {
+              package: pkg.name,
+              kind: "metadata_drift",
+              detail:
+                "index harn = \"${pkg.harn}\" but harn.toml at ${newest.tag} declares harn = \"${declared_harn}\"",
+            },
+          ]
+        }
+        const declared_exports = manifest_exports(manifest)
+        if declared_exports != nil && !same_names(declared_exports, pkg.exports) {
+          findings = findings
+            + [
+            Finding {
+              package: pkg.name,
+              kind: "metadata_drift",
+              detail:
+                "index exports = ${render_names(pkg.exports)} but harn.toml at ${newest.tag} declares exports = ${render_names(declared_exports)}",
+            },
+          ]
+        }
+      }
+    }
+  }
+  harness.stdio.log(
+    "Resolved ${checked_tags} recorded tags and read ${checked_manifests} manifests upstream.",
+  )
+  if findings.count == 0 {
+    harness.stdio.log(
+      "RECONCILE_OK packages=${packages.count} tags=${checked_tags} manifests=${checked_manifests} findings=0",
+    )
+    return
+  }
+  harness.stdio.log("")
+  harness.stdio.log("RECONCILE_DRIFT findings=${findings.count}")
+  for finding in findings {
+    harness.stdio.log("  [${finding.kind}] ${finding.package}: ${finding.detail}")
+  }
+  harness.stdio.log("")
+  harness.stdio.log("Fix by editing ${INDEX_PATH} per AGENTS.md, then run:")
+  harness.stdio.log("  harn package registry verify ${INDEX_PATH} --remote")
+  throw "package index is ${findings.count} finding(s) out of sync with upstream"
+}

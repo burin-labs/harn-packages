@@ -146,6 +146,14 @@ docs_url = "https://docs.harnlang.com/connectors/github.html"
 provenance = "https://github.com/burin-labs/harn-github-connector"
 
 [[package.version]]
+version = "0.1.0"
+git = "https://github.com/burin-labs/harn-github-connector"
+tag = "v0.1.0"
+rev = "abc8e108c44cddc9a731b2184188d34cf60b07bb"
+package = "harn-github-connector"
+provenance = "https://github.com/burin-labs/harn-github-connector/releases/tag/v0.1.0"
+
+[[package.version]]
 version = "0.2.0"
 git = "https://github.com/burin-labs/harn-github-connector"
 tag = "v0.2.0"
