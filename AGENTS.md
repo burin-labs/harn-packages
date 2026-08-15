@@ -55,6 +55,33 @@ The `Reconcile index` workflow runs it daily and on demand. It only reports;
 fixing drift is still a reviewed index edit. Cover changes to it with
 `harn test reconcile-index.test.harn`, which runs on every pull request.
 
+The job runs under the sandbox with `--allow-process-network` plus `/etc` and
+`/run` read roots. Both roots are needed for DNS: `/etc/resolv.conf` is a
+symlink into `/run` on Linux runners. Every network read goes through a
+subprocess, because `harness.net` egress is governed separately from
+subprocess sockets and cannot be granted without `--no-sandbox`. Checkout runs
+with `persist-credentials: false`, since the credential config it otherwise
+writes points outside the sandbox and makes every `git` call in the worktree
+fail to parse `.git/config`.
+
+If a future change has the reconciler open pull requests rather than only
+report, it must be idempotent across runs — a stable branch name, or a check
+against already-open reconciler PRs — so a daily schedule cannot accumulate
+one stale PR per day. It must also close or update its own superseded PR when
+upstream moves again before that PR merges.
+
+## Downstream projection
+
+This repository is the source of truth for the index. `harn-cloud` carries a
+fleet-projected copy at `package-index/harn-package-index.toml`, propagated by
+the nightly fleet-convergence run rather than by anything here.
+
+Do not read, diff, or edit that copy as part of index work, and do not treat a
+difference between the two as index drift. A change merged here reaches
+`harn-cloud` at the next nightly convergence, so the two are expected to differ
+for up to a day. The reconciler deliberately looks only at this repository's
+index and at upstream package repositories.
+
 ## Pages
 
 Merges to `main` publish only `harn-package-index.toml`, `CNAME`, and
