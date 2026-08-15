@@ -43,8 +43,12 @@ jobs:
           # pipefail matters here: without it `tee` would mask a drift exit
           # code and this gate would pass while reporting drift.
           set -euo pipefail
-          harn run --allow-process-network reconcile-index.harn 2>&1 \
-            | tee reconcile-index.log
+          # `--sandbox-read-root /etc` is what makes DNS work: the filesystem
+          # jail otherwise hides /etc/resolv.conf and /etc/ssl, so git resolves
+          # nothing and every ls-remote fails with "Could not resolve host".
+          # Read-only, subprocess-only, and narrower than --no-sandbox.
+          harn run --allow-process-network --sandbox-read-root /etc \
+            reconcile-index.harn 2>&1 | tee reconcile-index.log
 
       - name: Upload reconcile log
         if: always()
