@@ -42,17 +42,19 @@ harn run --allow-process-network reconcile-index.harn
 
 It reads the index through `harn package search --json` rather than parsing
 TOML itself, then compares every package against `git ls-remote` and the
-published `harn.toml`. It reports four kinds of drift and exits non-zero on
-any of them:
+published `harn.toml`. It reports five kinds of drift, and in the default
+`report` mode exits non-zero on any of them:
 
 - `unrecorded_release` — an upstream `v*` tag with no version record.
 - `rev_mismatch` — a record whose `rev` is no longer what its tag resolves to.
 - `missing_upstream_tag` — a record naming a tag that no longer exists.
 - `metadata_drift` — package-level `harn` or `exports` disagreeing with the
-  manifest at the newest non-yanked record.
+  manifest at the newest published release.
+- `manifest_unreadable` — a repository whose `harn.toml` could not be read at
+  that release, so its metadata was not checked.
 
-The `Reconcile index` workflow runs it daily and on demand. It only reports;
-fixing drift is still a reviewed index edit. Cover changes to it with
+The `Reconcile index` workflow runs it daily, on demand, and whenever a package
+repository reports a release. Cover changes to it with
 `harn test reconcile-index.test.harn`, which runs on every pull request.
 
 The job runs under the sandbox with `--allow-process-network` plus `/etc` and
@@ -64,11 +66,62 @@ with `persist-credentials: false`, since the credential config it otherwise
 writes points outside the sandbox and makes every `git` call in the worktree
 fail to parse `.git/config`.
 
-If a future change has the reconciler open pull requests rather than only
-report, it must be idempotent across runs — a stable branch name, or a check
-against already-open reconciler PRs — so a daily schedule cannot accumulate
-one stale PR per day. It must also close or update its own superseded PR when
-upstream moves again before that PR merges.
+## Proposing
+
+`RECONCILE_MODE` selects what a run does with what it found. `report` is the
+default, so a local run and any host that forgets to set the variable observes
+without editing anything. `propose` also writes the correction:
+
+```sh
+RECONCILE_MODE=propose harn run --allow-process-network reconcile-index.harn
+```
+
+A finding is proposed only when the correction is mechanical:
+
+- `unrecorded_release` becomes a `[[package.version]]` block, naming the tag,
+  the commit it resolves to, and the package name read from the manifest at
+  that tag.
+- `metadata_drift` becomes a replacement for the package-level `harn` or
+  `exports` line, provided the existing value is a complete TOML value on one
+  line.
+- `rev_mismatch` and `missing_upstream_tag` are never proposed. A tag that
+  moved or vanished is a repository incident or a rewritten release, and
+  editing the index to agree with it would launder that away.
+- `manifest_unreadable` is never proposed, because a version record names its
+  package by the manifest name and there is nothing to read it from.
+
+Package metadata is compared against the manifest at the newest published
+release, not the newest recorded one, so a run that records a release also
+aligns the metadata that release shipped with.
+
+The edited index is re-verified with
+`harn package registry verify harn-package-index.toml --remote` before anything
+is pushed, so a proposal that would fail review never reaches a pull request. A
+propose run exits zero when everything it found became a proposal, because the
+pull request is the alarm and it outlives the run. It still fails when a
+finding has no mechanical correction.
+
+The script decides what the index should say and renders the title and body
+into `reconcile-proposal.json`. `scripts/propose-index-drift.sh` transports
+that to GitHub: the branch, the commit, and the credential stay outside the
+Harn sandbox, which strips `*TOKEN` variables from subprocesses anyway. Commits
+go through the contents API so GitHub signs them, and the checkout keeps
+`persist-credentials: false`.
+
+`reconcile/index-drift` is bot-owned. Every run resets it to current main and
+re-applies the current proposal, so a daily schedule updates one pull request
+rather than accumulating one per day, and a run that finds no drift closes the
+superseded proposal. Do not push review fixes to that branch; merge the
+proposal and correct in a follow-up, or close it and edit the index directly.
+
+## Release-triggered reconciliation
+
+Package repositories call
+`burin-labs/.github/.github/workflows/register-package-release.yml` on a
+release tag, which dispatches this workflow in `propose` mode and fails the
+calling run if it does not succeed. The trigger is hosted once in the
+organization repository rather than copied into every package repository, and
+the token it uses can only dispatch: writing the index stays here.
 
 ## Downstream projection
 

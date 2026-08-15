@@ -2,11 +2,25 @@
 //
 // The index is hand-authored: nothing in this repo or in any package repo
 // watches upstream tags, so a release can land without ever reaching the
-// index (burin-labs/harn-github-connector#289). This script is the observer.
+// index (burin-labs/harn-github-connector#289). This script is the observer,
+// and in `RECONCILE_MODE=propose` it is also the author of the correction.
 //
 // It reads the registry through the Harn-owned parser rather than parsing
 // TOML here, so this file cannot drift from the format the verifier enforces.
+// It writes the index back as text, so a proposal is a minimal diff a
+// reviewer can read rather than a wholesale reserialization.
+//
+// This script decides what the index should say and how to say it. Opening
+// the pull request is the workflow's job: the branch, the commit, and the
+// credential stay outside this file, which therefore needs no write authority
+// beyond its own checkout.
 const INDEX_PATH = "harn-package-index.toml"
+
+// The workflow reads this to decide whether there is anything to propose and
+// what to title the pull request with.
+const PROPOSAL_PATH = "reconcile-proposal.json"
+
+const ISSUE_URL = "https://github.com/burin-labs/harn-github-connector/issues/289"
 
 const PEELED_SUFFIX = "^{}"
 
@@ -17,10 +31,39 @@ pub struct UpstreamTag {
   sha: string
 }
 
+/**
+ * One disagreement between the index and upstream. `proposed` records whether
+ * this run turned the finding into an index edit; anything left false needs a
+ * human, because there is no mechanical correction for it.
+ */
 struct Finding {
   package: string
   kind: string
   detail: string
+  proposed: bool
+}
+
+/** A missing release record, rendered as the exact block to add. */
+pub struct VersionEdit {
+  package: string
+  version: string
+  tag: string
+  rev: string
+  block: string
+}
+
+/** A package-level key the newest published manifest disagrees with. */
+pub struct MetadataEdit {
+  package: string
+  key: string
+  old: string
+  new: string
+  line: string
+}
+
+struct Section {
+  start: int
+  end: int
 }
 
 /** Read the index through `harn package search`, which owns registry parsing. */
@@ -189,6 +232,32 @@ pub fn manifest_exports(manifest: string) -> list? {
   return names
 }
 
+/**
+ * Read `name` from the manifest's `[package]` table. A version record names
+ * the package by its manifest name (`harn-github-connector`), not by its
+ * registry name (`@burin/github-connector`), so a proposed record has to take
+ * it from the manifest rather than from the index entry it is being added to.
+ */
+pub fn manifest_package_name(manifest: string) -> string? {
+  let in_package = false
+  for line in manifest.split("\n") {
+    const trimmed = line.trim()
+    if trimmed.starts_with("[") {
+      in_package = trimmed == "[package]"
+      continue
+    }
+    if !in_package || !trimmed.starts_with("name") {
+      continue
+    }
+    const rest = substring(trimmed, 4, trimmed.count).trim()
+    if !rest.starts_with("=") {
+      continue
+    }
+    return unquote(substring(rest, 1, rest.count).trim())
+  }
+  return nil
+}
+
 fn unquote(value: string) -> string {
   if value.count >= 2 && value.starts_with("\"") && value.ends_with("\"") {
     return substring(value, 1, value.count - 1)
@@ -308,112 +377,663 @@ pub fn newest_recorded(versions: list) -> dict? {
   return newest
 }
 
-fn main(harness: Harness) {
-  const packages = read_registry(harness.process)
-  harness.stdio.log("Reconciling ${packages.count} packages against upstream tags.")
-  let findings: list = []
-  let checked_tags = 0
-  let checked_manifests = 0
-  for pkg in packages {
-    const upstream = ls_remote_tags(harness.process, pkg.repository)
-    // 1. Every recorded version must still resolve to the commit it claims.
-    for record in pkg.version {
-      const found = find_tag(upstream, record.tag)
-      if found == nil {
-        findings = findings
-          + [
-          Finding {
-            package: pkg.name,
-            kind: "missing_upstream_tag",
-            detail:
-              "${record.version} records tag ${record.tag}, which does not exist in ${pkg.repository}",
-          },
-        ]
-        continue
+/** Everything a version record names, from the sources that own each field. */
+pub struct VersionSpec {
+  repository: string
+  manifest_package: string
+  version: string
+  tag: string
+  rev: string
+}
+
+/** Render a version record in the exact shape and key order the index uses. */
+pub fn render_version_block(spec: VersionSpec) -> string {
+  return "[[package.version]]\n"
+    + "version = \"${spec.version}\"\n"
+    + "git = \"${spec.repository}\"\n"
+    + "tag = \"${spec.tag}\"\n"
+    + "rev = \"${spec.rev}\"\n"
+    + "package = \"${spec.manifest_package}\"\n"
+    + "provenance = \"${spec.repository}/releases/tag/${spec.tag}\""
+}
+
+/**
+ * Locate one package's `[[package]]` table and its version blocks. `end` is
+ * exclusive. `[[package.version]]` also starts with `[[package`, so the header
+ * has to match exactly rather than by prefix.
+ */
+pub fn package_section(lines: list, package_name: string) -> Section? {
+  let start = -1
+  let index = 0
+  while index < lines.count {
+    if lines[index].trim() == "[[package]]" {
+      if start >= 0 {
+        return Section {start: start, end: index}
       }
-      checked_tags = checked_tags + 1
-      if found.sha != record.rev {
-        findings = findings
-          + [
-          Finding {
-            package: pkg.name,
-            kind: "rev_mismatch",
-            detail:
-              "${record.version} pins rev ${record.rev} but tag ${record.tag} now resolves to ${found.sha}",
-          },
-        ]
-      }
-    }
-    // 2. Every upstream release tag should appear in the index.
-    for entry in upstream {
-      if !entry.tag.starts_with("v") {
-        continue
-      }
-      const version = substring(entry.tag, 1, entry.tag.count)
-      let recorded = false
-      for record in pkg.version {
-        if record.version == version {
-          recorded = true
-        }
-      }
-      if !recorded {
-        findings = findings
-          + [
-          Finding {
-            package: pkg.name,
-            kind: "unrecorded_release",
-            detail:
-              "${pkg.repository} published ${entry.tag} (${entry.sha}) but the index has no ${version} record",
-          },
-        ]
+      if package_name_at(lines, index) == package_name {
+        start = index
       }
     }
-    // 3. Package-level metadata should match the newest published manifest.
-    const newest = newest_recorded(pkg.version)
-    if newest != nil {
-      const manifest = fetch_manifest(harness.process, pkg.repository, newest.tag)
-      if manifest == nil {
-        findings = findings
-          + [
-          Finding {
-            package: pkg.name,
-            kind: "manifest_unreadable",
-            detail:
-              "could not read harn.toml at ${newest.tag} from ${pkg.repository}; metadata was not checked",
-          },
-        ]
-      } else {
-        checked_manifests = checked_manifests + 1
-        const declared_harn = manifest_harn_range(manifest)
-        if declared_harn != nil && declared_harn != pkg.harn {
-          findings = findings
-            + [
-            Finding {
-              package: pkg.name,
-              kind: "metadata_drift",
-              detail:
-                "index harn = \"${pkg.harn}\" but harn.toml at ${newest.tag} declares harn = \"${declared_harn}\"",
-            },
-          ]
-        }
-        const declared_exports = manifest_exports(manifest)
-        if declared_exports != nil && !same_names(declared_exports, pkg.exports) {
-          findings = findings
-            + [
-            Finding {
-              package: pkg.name,
-              kind: "metadata_drift",
-              detail:
-                "index exports = ${render_names(pkg.exports)} but harn.toml at ${newest.tag} declares exports = ${render_names(declared_exports)}",
-            },
-          ]
+    index = index + 1
+  }
+  if start >= 0 {
+    return Section {start: start, end: lines.count}
+  }
+  return nil
+}
+
+fn package_name_at(lines: list, header: int) -> string? {
+  let index = header + 1
+  while index < lines.count {
+    const trimmed = lines[index].trim()
+    if trimmed.starts_with("[") {
+      return nil
+    }
+    if trimmed.starts_with("name") {
+      const rest = substring(trimmed, 4, trimmed.count).trim()
+      if rest.starts_with("=") {
+        return unquote(substring(rest, 1, rest.count).trim())
+      }
+    }
+    index = index + 1
+  }
+  return nil
+}
+
+/**
+ * Find a package-level key's line. Returns -1 once the scan reaches the first
+ * `[[package.version]]`, so a key inside a version record can never be
+ * mistaken for the package-level one that shares its name.
+ */
+pub fn package_key_line(lines: list, section: Section, key: string) -> int {
+  let index = section.start + 1
+  while index < section.end {
+    const trimmed = lines[index].trim()
+    if trimmed.starts_with("[") {
+      return -1
+    }
+    if trimmed.starts_with(key) {
+      const rest = substring(trimmed, key.count, trimmed.count).trim()
+      if rest.starts_with("=") {
+        return index
+      }
+    }
+    index = index + 1
+  }
+  return -1
+}
+
+/**
+ * Append version blocks to a package's table. The index keeps records in
+ * ascending release order and a missing release is newer than what is already
+ * recorded, so appending preserves that order. The insert steps back over the
+ * blank line that separates tables, or it would land in the next package.
+ */
+pub fn insert_version_blocks(index_text: string, package_name: string, blocks: list) -> string {
+  if blocks.count == 0 {
+    return index_text
+  }
+  const lines = index_text.split("\n")
+  const section = package_section(lines, package_name)
+  if section == nil {
+    throw "cannot record ${package_name}: no [[package]] table in ${INDEX_PATH}"
+  }
+  let at = section.end
+  while at > section.start && lines[at - 1].trim() == "" {
+    at = at - 1
+  }
+  let out: list = []
+  let index = 0
+  while index < lines.count {
+    if index == at {
+      out = out + rendered_lines(blocks)
+    }
+    out = out + [lines[index]]
+    index = index + 1
+  }
+  if at >= lines.count {
+    out = out + rendered_lines(blocks)
+  }
+  return out.join("\n")
+}
+
+fn rendered_lines(blocks: list) -> list {
+  let out: list = []
+  for block in blocks {
+    out = out + [""] + block.split("\n")
+  }
+  return out
+}
+
+/** Replace a package-level key's line, leaving every other byte alone. */
+pub fn replace_package_line(index_text: string, edit: MetadataEdit) -> string {
+  const lines = index_text.split("\n")
+  const section = package_section(lines, edit.package)
+  if section == nil {
+    throw "cannot align ${edit.package}: no [[package]] table in ${INDEX_PATH}"
+  }
+  const target = package_key_line(lines, section, edit.key)
+  if target < 0 {
+    throw "cannot align ${edit.package}: no package-level ${edit.key} key to replace"
+  }
+  let out: list = []
+  let index = 0
+  while index < lines.count {
+    if index == target {
+      out = out + [edit.line]
+    } else {
+      out = out + [lines[index]]
+    }
+    index = index + 1
+  }
+  return out.join("\n")
+}
+
+/**
+ * A package-level value this script may rewrite has to be a complete TOML
+ * value on one line. Anything else is reported rather than edited, because a
+ * line-oriented replacement would corrupt it.
+ */
+pub fn single_line_value(lines: list, section: Section, key: string) -> string? {
+  const target = package_key_line(lines, section, key)
+  if target < 0 {
+    return nil
+  }
+  const trimmed = lines[target].trim()
+  const eq = trimmed.index_of("=")
+  const value = substring(trimmed, eq + 1, trimmed.count).trim()
+  if value.starts_with("[") && !value.ends_with("]") {
+    return nil
+  }
+  if value.starts_with("\"") && !value.ends_with("\"") {
+    return nil
+  }
+  return value
+}
+
+pub fn sort_version_edits(edits: list) -> list {
+  let out: list = []
+  for edit in edits {
+    let inserted: list = []
+    let placed = false
+    for existing in out {
+      if !placed && version_greater(existing.version, edit.version) {
+        inserted = inserted + [edit]
+        placed = true
+      }
+      inserted = inserted + [existing]
+    }
+    if !placed {
+      inserted = inserted + [edit]
+    }
+    out = inserted
+  }
+  return out
+}
+
+pub fn distinct_packages(version_edits: list, metadata_edits: list) -> list {
+  let names: list = []
+  for edit in version_edits {
+    if !names.contains(edit.package) {
+      names = names + [edit.package]
+    }
+  }
+  for edit in metadata_edits {
+    if !names.contains(edit.package) {
+      names = names + [edit.package]
+    }
+  }
+  return names
+}
+
+/**
+ * Name the drift in the title, so the pull-request list alone says which
+ * packages and versions went unrecorded.
+ */
+pub fn render_title(version_edits: list, metadata_edits: list) -> string {
+  const packages = distinct_packages(version_edits, metadata_edits)
+  if version_edits.count == 0 {
+    if packages.count == 1 {
+      return "fix(index): align ${packages[0]} metadata with its manifest"
+    }
+    return "fix(index): align package metadata for ${packages.count} packages"
+  }
+  const sorted = sort_version_edits(version_edits)
+  const released = distinct_packages(version_edits, [])
+  if released.count > 1 {
+    return "fix(index): record ${version_edits.count} releases across ${released.count} packages"
+  }
+  if sorted.count == 1 {
+    return "fix(index): record ${sorted[0].package} ${sorted[0].version}"
+  }
+  return "fix(index): record ${sorted[0].package} ${sorted[0].version} through ${sorted[sorted.count - 1].version}"
+}
+
+/**
+ * Render the pull-request body. It carries the evidence for every edit, the
+ * findings it could not correct, and the run that produced it, so the reviewer
+ * never has to re-derive any of it.
+ */
+pub fn render_body(
+  version_edits: list,
+  metadata_edits: list,
+  blocking: list,
+  run_url: string,
+) -> string {
+  let out = "The index disagreed with what these repositories have published."
+    + " `reconcile-index.harn` generated this change; it is not hand-authored.\n"
+  if version_edits.count > 0 {
+    out = out + "\n## Releases to record\n\n"
+    // Grouped by package and ascending within it, so the list reads in the
+    // order the records are written into the index.
+    for name in distinct_packages(version_edits, []) {
+      for edit in sort_version_edits(version_edits) {
+        if edit.package == name {
+          out = out
+            + "- `${edit.package}` ${edit.version}, from tag `${edit.tag}` at `${edit.rev}`\n"
         }
       }
     }
   }
+  if metadata_edits.count > 0 {
+    out = out + "\n## Package metadata to align\n\n"
+    for edit in metadata_edits {
+      out = out + "- `${edit.package}` `${edit.key}`: `${edit.old}` becomes `${edit.new}`\n"
+    }
+  }
+  if blocking.count > 0 {
+    out = out + "\n## Findings this run could not correct\n\n"
+    out = out
+      + "These need a decision rather than an edit, so they are reported here"
+      + " and the reconcile run fails until they are resolved.\n\n"
+    for finding in blocking {
+      out = out + "- [${finding.kind}] `${finding.package}`: ${finding.detail}\n"
+    }
+  }
+  out = out
+    + "\n`harn package registry verify ${INDEX_PATH} --remote` passed on this"
+    + " exact content before the pull request was opened.\n"
+  if run_url != "" {
+    out = out + "\nProduced by ${run_url}.\n"
+  }
+  out = out + "\nThe registration gap this closes is ${ISSUE_URL}.\n"
+  return out
+}
+
+struct PackageResult {
+  findings: list
+  version_edits: list
+  metadata_edits: list
+  checked_tags: int
+  checked_manifests: int
+}
+
+struct TagCheck {
+  findings: list
+  checked: int
+}
+
+struct EditSet {
+  findings: list
+  version_edits: list
+  metadata_edits: list
+}
+
+/** Every recorded version must still resolve to the commit it claims. */
+fn check_recorded_tags(pkg: dict, upstream: list) -> TagCheck {
+  let findings: list = []
+  let checked = 0
+  for record in pkg.version {
+    const found = find_tag(upstream, record.tag)
+    if found == nil {
+      findings = findings
+        + [
+        Finding {
+          package: pkg.name,
+          kind: "missing_upstream_tag",
+          detail:
+            "${record.version} records tag ${record.tag}, which does not exist in ${pkg.repository}",
+          proposed: false,
+        },
+      ]
+      continue
+    }
+    checked = checked + 1
+    if found.sha != record.rev {
+      // Deliberately never proposed. A tag that moved is either a repository
+      // incident or a rewritten release, and editing the index to agree with
+      // it would launder that away.
+      findings = findings
+        + [
+        Finding {
+          package: pkg.name,
+          kind: "rev_mismatch",
+          detail:
+            "${record.version} pins rev ${record.rev} but tag ${record.tag} now resolves to ${found.sha}",
+          proposed: false,
+        },
+      ]
+    }
+  }
+  return TagCheck {findings: findings, checked: checked}
+}
+
+/** Upstream `v*` tags with no version record. */
+pub fn unrecorded_releases(pkg: dict, upstream: list) -> list {
+  let out: list = []
+  for entry in upstream {
+    if !entry.tag.starts_with("v") {
+      continue
+    }
+    let recorded = false
+    for record in pkg.version {
+      if record.version == substring(entry.tag, 1, entry.tag.count) {
+        recorded = true
+      }
+    }
+    if !recorded {
+      out = out + [entry]
+    }
+  }
+  return out
+}
+
+/**
+ * The tag whose manifest the package metadata should match: the newest
+ * release the index will name once this run's proposal lands, rather than the
+ * newest already-recorded one. Empty when the package has no usable record.
+ */
+pub fn newest_published_tag(pkg: dict, unrecorded: list) -> string {
+  let tag = ""
+  let version = ""
+  const newest = newest_recorded(pkg.version)
+  if newest != nil {
+    tag = newest.tag
+    version = newest.version
+  }
+  for entry in unrecorded {
+    const candidate = substring(entry.tag, 1, entry.tag.count)
+    if version == "" || version_greater(candidate, version) {
+      version = candidate
+      tag = entry.tag
+    }
+  }
+  return tag
+}
+
+/**
+ * Turn missing releases into records. A record names its package by the
+ * manifest name, so without a readable manifest the finding stands alone and
+ * a human writes the record.
+ */
+fn version_proposals(pkg: dict, unrecorded: list, manifest_package: string) -> EditSet {
+  let findings: list = []
+  let edits: list = []
+  for entry in unrecorded {
+    const version = substring(entry.tag, 1, entry.tag.count)
+    if manifest_package != "" {
+      edits = edits
+        + [
+        VersionEdit {
+          package: pkg.name,
+          version: version,
+          tag: entry.tag,
+          rev: entry.sha,
+          block: render_version_block(
+            VersionSpec {
+              repository: pkg.repository,
+              manifest_package: manifest_package,
+              version: version,
+              tag: entry.tag,
+              rev: entry.sha,
+            },
+          ),
+        },
+      ]
+    }
+    findings = findings
+      + [
+      Finding {
+        package: pkg.name,
+        kind: "unrecorded_release",
+        detail:
+          "${pkg.repository} published ${entry.tag} (${entry.sha}) but the index has no ${version} record",
+        proposed: manifest_package != "",
+      },
+    ]
+  }
+  return EditSet {findings: findings, version_edits: edits, metadata_edits: []}
+}
+
+/**
+ * Compare package-level metadata against the manifest. A value this script
+ * cannot rewrite as a single line is reported rather than edited, because a
+ * line-oriented replacement would corrupt it.
+ */
+fn metadata_proposals(pkg: dict, manifest: string, tag: string, index_lines: list) -> EditSet {
+  let findings: list = []
+  let edits: list = []
+  const section = package_section(index_lines, pkg.name)
+  const declared_harn = manifest_harn_range(manifest)
+  if declared_harn != nil && declared_harn != pkg.harn {
+    const editable = section != nil && single_line_value(index_lines, section, "harn") != nil
+    if editable {
+      edits = edits
+        + [
+        MetadataEdit {
+          package: pkg.name,
+          key: "harn",
+          old: pkg.harn,
+          new: declared_harn,
+          line: "harn = \"${declared_harn}\"",
+        },
+      ]
+    }
+    findings = findings
+      + [
+      Finding {
+        package: pkg.name,
+        kind: "metadata_drift",
+        detail:
+          "index harn = \"${pkg.harn}\" but harn.toml at ${tag} declares harn = \"${declared_harn}\"",
+        proposed: editable,
+      },
+    ]
+  }
+  const declared_exports = manifest_exports(manifest)
+  if declared_exports != nil && !same_names(declared_exports, pkg.exports) {
+    const editable = section != nil && single_line_value(index_lines, section, "exports") != nil
+    if editable {
+      edits = edits
+        + [
+        MetadataEdit {
+          package: pkg.name,
+          key: "exports",
+          old: render_names(pkg.exports),
+          new: render_names(declared_exports),
+          line: "exports = ${render_names(declared_exports)}",
+        },
+      ]
+    }
+    findings = findings
+      + [
+      Finding {
+        package: pkg.name,
+        kind: "metadata_drift",
+        detail:
+          "index exports = ${render_names(pkg.exports)} but harn.toml at ${tag} declares exports = ${render_names(declared_exports)}",
+        proposed: editable,
+      },
+    ]
+  }
+  return EditSet {findings: findings, version_edits: [], metadata_edits: edits}
+}
+
+/**
+ * Compare one indexed package against its repository. Every disagreement
+ * becomes a finding; the ones with a mechanical correction also become an
+ * edit and are marked `proposed`, so the report and the proposal cannot
+ * disagree about what this run can fix.
+ */
+fn reconcile_package(process: HarnessProcess, pkg: dict, index_lines: list) -> PackageResult {
+  const upstream = ls_remote_tags(process, pkg.repository)
+  const recorded = check_recorded_tags(pkg, upstream)
+  const unrecorded = unrecorded_releases(pkg, upstream)
+  const tag = newest_published_tag(pkg, unrecorded)
+  let manifest: string? = nil
+  if tag != "" {
+    manifest = fetch_manifest(process, pkg.repository, tag)
+  }
+  if manifest == nil {
+    let findings = recorded.findings
+    if tag != "" {
+      findings = findings
+        + [
+        Finding {
+          package: pkg.name,
+          kind: "manifest_unreadable",
+          detail:
+            "could not read harn.toml at ${tag} from ${pkg.repository}; metadata was not checked",
+          proposed: false,
+        },
+      ]
+    }
+    const unreadable = version_proposals(pkg, unrecorded, "")
+    return PackageResult {
+      findings: findings + unreadable.findings,
+      version_edits: [],
+      metadata_edits: [],
+      checked_tags: recorded.checked,
+      checked_manifests: 0,
+    }
+  }
+  let manifest_package = ""
+  const declared_name = manifest_package_name(manifest)
+  if declared_name != nil && package_section(index_lines, pkg.name) != nil {
+    manifest_package = declared_name
+  }
+  const versions = version_proposals(pkg, unrecorded, manifest_package)
+  const metadata = metadata_proposals(pkg, manifest, tag, index_lines)
+  return PackageResult {
+    findings: recorded.findings + versions.findings + metadata.findings,
+    version_edits: versions.version_edits,
+    metadata_edits: metadata.metadata_edits,
+    checked_tags: recorded.checked,
+    checked_manifests: 1,
+  }
+}
+
+/** Apply every edit to the index text, in the order that keeps offsets valid. */
+pub fn apply_edits(index_text: string, version_edits: list, metadata_edits: list) -> string {
+  let text = index_text
+  for edit in metadata_edits {
+    text = replace_package_line(text, edit)
+  }
+  for name in distinct_packages(version_edits, []) {
+    let blocks: list = []
+    for edit in sort_version_edits(version_edits) {
+      if edit.package == name {
+        blocks = blocks + [edit.block]
+      }
+    }
+    text = insert_version_blocks(text, name, blocks)
+  }
+  return text
+}
+
+/**
+ * Re-verify the edited index with the same Harn-owned contract CI runs, so a
+ * proposal that would fail review never reaches a pull request.
+ */
+fn verify_index(process: HarnessProcess) {
+  const result = process.run(
+    {
+      program: "harn",
+      args: ["package", "registry", "verify", INDEX_PATH, "--remote"],
+      timeout_ms: 300000,
+    },
+  )
+  if result.exit_code != 0 {
+    throw "proposed index failed registry verification (exit ${result.exit_code}): ${result.stdout} ${result.stderr}"
+  }
+}
+
+fn run_url(env: HarnessEnv) -> string {
+  const server = env.get_or("GITHUB_SERVER_URL", "")
+  const repository = env.get_or("GITHUB_REPOSITORY", "")
+  const id = env.get_or("GITHUB_RUN_ID", "")
+  if server == "" || repository == "" || id == "" {
+    return ""
+  }
+  return "${server}/${repository}/actions/runs/${id}"
+}
+
+fn write_proposal(harness: Harness, version_edits: list, metadata_edits: list, blocking: list) {
+  const changed = version_edits.count + metadata_edits.count > 0
+  let proposal = {
+    changed: false,
+    blocking: blocking.count,
+    packages: [],
+    versions: 0,
+    metadata: 0,
+    title: "",
+    body: "",
+  }
+  if changed {
+    proposal = {
+      changed: true,
+      blocking: blocking.count,
+      packages: distinct_packages(version_edits, metadata_edits),
+      versions: version_edits.count,
+      metadata: metadata_edits.count,
+      title: render_title(version_edits, metadata_edits),
+      body: render_body(version_edits, metadata_edits, blocking, run_url(harness.env)),
+    }
+  }
+  harness.fs.write_text(PROPOSAL_PATH, json_stringify_pretty(proposal))
+  harness.stdio.log("Wrote ${PROPOSAL_PATH}: changed=${changed} blocking=${blocking.count}")
+}
+
+fn main(harness: Harness) {
+  // `report` is the default so that a local run, and any host that forgets to
+  // set the variable, observes without editing anything.
+  const mode = harness.env.get_or("RECONCILE_MODE", "report")
+  if mode != "report" && mode != "propose" {
+    throw "RECONCILE_MODE must be \"report\" or \"propose\", got \"${mode}\""
+  }
+  const packages = read_registry(harness.process)
+  harness.stdio.log("Reconciling ${packages.count} packages against upstream tags (mode=${mode}).")
+  const index_text = harness.fs.read_text(INDEX_PATH)
+  const index_lines = index_text.split("\n")
+  let findings: list = []
+  let version_edits: list = []
+  let metadata_edits: list = []
+  let checked_tags = 0
+  let checked_manifests = 0
+  for pkg in packages {
+    const result = reconcile_package(harness.process, pkg, index_lines)
+    findings = findings + result.findings
+    version_edits = version_edits + result.version_edits
+    metadata_edits = metadata_edits + result.metadata_edits
+    checked_tags = checked_tags + result.checked_tags
+    checked_manifests = checked_manifests + result.checked_manifests
+  }
   harness.stdio.log(
     "Resolved ${checked_tags} recorded tags and read ${checked_manifests} manifests upstream.",
   )
+  let blocking: list = []
+  for finding in findings {
+    if !finding.proposed {
+      blocking = blocking + [finding]
+    }
+  }
+  if mode == "propose" {
+    if version_edits.count + metadata_edits.count > 0 {
+      harness.fs.write_text(INDEX_PATH, apply_edits(index_text, version_edits, metadata_edits))
+      verify_index(harness.process)
+    }
+    write_proposal(harness, version_edits, metadata_edits, blocking)
+  }
   if findings.count == 0 {
     harness.stdio.log(
       "RECONCILE_OK packages=${packages.count} tags=${checked_tags} manifests=${checked_manifests} findings=0",
@@ -421,11 +1041,24 @@ fn main(harness: Harness) {
     return
   }
   harness.stdio.log("")
-  harness.stdio.log("RECONCILE_DRIFT findings=${findings.count}")
+  harness.stdio.log(
+    "RECONCILE_DRIFT findings=${findings.count} proposable=${findings.count - blocking.count}",
+  )
   for finding in findings {
     harness.stdio.log("  [${finding.kind}] ${finding.package}: ${finding.detail}")
   }
   harness.stdio.log("")
+  if mode == "propose" {
+    if blocking.count == 0 {
+      // The pull request is the alarm, and it is durable in a way a red run is
+      // not, so proposing every finding is a successful reconcile.
+      harness.stdio.log(
+        "RECONCILE_PROPOSED versions=${version_edits.count} metadata=${metadata_edits.count} blocking=0",
+      )
+      return
+    }
+    throw "${blocking.count} finding(s) have no mechanical correction and need a decision"
+  }
   harness.stdio.log("Fix by editing ${INDEX_PATH} per AGENTS.md, then run:")
   harness.stdio.log("  harn package registry verify ${INDEX_PATH} --remote")
   throw "package index is ${findings.count} finding(s) out of sync with upstream"

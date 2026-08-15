@@ -3,13 +3,31 @@ name: Reconcile index
 # Nothing else observes the gap between an upstream release tag and this
 # index: `harn publish` is author-invoked and wired into no release pipeline,
 # so drift is bounded only by when someone last looked
-# (burin-labs/harn-github-connector#289). This job is that observer.
+# (burin-labs/harn-github-connector#289). This job is that observer, and in
+# `propose` mode it is also the alarm: found drift becomes a pull request that
+# outlives the run that found it.
+#
+# Package repositories reach this workflow through
+# `burin-labs/.github/.github/workflows/register-package-release.yml`, so a
+# release registers within minutes instead of waiting for the daily schedule.
 
 on:
   schedule:
     # Daily at 07:00 UTC.
     - cron: "0 7 * * *"
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Propose opens or updates the index pull request; report only observes.
+        type: choice
+        options:
+          - propose
+          - report
+        default: propose
+      reason:
+        description: Optional note recorded in the run summary, such as the release that triggered it.
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -22,14 +40,15 @@ jobs:
   reconcile:
     name: Upstream drift
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       # `persist-credentials: false` is load-bearing, not hygiene. The default
       # writes an `http.extraheader` into `.git/config` that points at a
       # credentials file under RUNNER_TEMP. That path is outside the Harn
       # sandbox's read roots, so every `git ls-remote` the reconciler runs from
       # this directory dies with "bad config line 12 in file .git/config".
-      # This job only reads public repositories and pushes nothing.
+      # The proposal is pushed through the API instead, so nothing here needs
+      # a git credential.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -46,8 +65,21 @@ jobs:
           ls -l /etc/resolv.conf || true
           readlink -f /etc/resolv.conf || true
 
-      - name: Reconcile index against upstream tags
+      - name: Note why this run was requested
+        if: inputs.reason != ''
         shell: bash
+        env:
+          REASON: ${{ inputs.reason }}
+        run: echo "Requested by $REASON" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Reconcile index against upstream tags
+        id: reconcile
+        shell: bash
+        env:
+          # Scheduled runs propose. A found-drift state nobody sees is the
+          # failure this mechanism exists to remove, and a red daily run is a
+          # weaker alarm than a pull request carrying the fix.
+          RECONCILE_MODE: ${{ inputs.mode || 'propose' }}
         run: |
           # pipefail matters here: without it `tee` would mask a drift exit
           # code and this gate would pass while reporting drift.
@@ -62,10 +94,56 @@ jobs:
             --sandbox-read-root /etc --sandbox-read-root /run \
             reconcile-index.harn 2>&1 | tee reconcile-index.log
 
+      # Runs even when the reconciler failed on a finding it cannot correct, so
+      # the corrections it could make still reach a reviewer.
+      - name: Read the proposal
+        id: proposal
+        if: always() && steps.reconcile.outcome != 'skipped'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -f reconcile-proposal.json ]]; then
+            echo "changed=absent" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          jq -r '"changed=\(.changed)"' reconcile-proposal.json >> "$GITHUB_OUTPUT"
+          jq -r .title reconcile-proposal.json > reconcile-pr-title.txt
+          jq -r .body reconcile-proposal.json > reconcile-pr-body.md
+
+      - name: Mint the index-write token
+        id: token
+        if: always() && steps.proposal.outputs.changed != 'absent'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: burin-labs
+          repositories: harn-packages
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Open or update the index proposal
+        if: always() && steps.proposal.outputs.changed == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          INDEX_REPO: ${{ github.repository }}
+        run: ./scripts/propose-index-drift.sh open
+
+      - name: Withdraw a superseded proposal
+        if: always() && steps.proposal.outputs.changed == 'false'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          INDEX_REPO: ${{ github.repository }}
+        run: ./scripts/propose-index-drift.sh withdraw
+
       - name: Upload reconcile log
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: reconcile-index-log
-          path: reconcile-index.log
+          path: |
+            reconcile-index.log
+            reconcile-proposal.json
           if-no-files-found: error

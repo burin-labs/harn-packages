@@ -2,12 +2,28 @@
 // subprocesses: these are the parsers and comparators that decide whether a
 // finding is reported, so they are the parts worth pinning.
 import {
+  MetadataEdit,
+  VersionEdit,
+  VersionSpec,
+  apply_edits,
+  distinct_packages,
   find_tag,
+  insert_version_blocks,
   manifest_exports,
   manifest_harn_range,
+  manifest_package_name,
+  newest_published_tag,
   newest_recorded,
+  package_key_line,
+  package_section,
+  render_body,
+  render_title,
+  render_version_block,
   repo_slug,
   same_names,
+  single_line_value,
+  sort_version_edits,
+  unrecorded_releases,
   upsert_tag,
   version_greater,
 } from "./reconcile-index.harn"
@@ -137,4 +153,368 @@ pipeline test_repository_urls_reduce_to_owner_and_name() {
       == "burin-labs/harn-box-connector",
   )
   assert(repo_slug("https://example.com/not-github") == nil)
+}
+
+// A two-package index in the exact shape of the published one. Proposals are
+// applied to text, so the fixture has to carry the real separators, and the
+// trailing `+ "\n"` is load-bearing: a block string drops its final newline
+// while a real index file ends with one, which is the difference between
+// appending inside the last package and appending past the end of the file.
+const INDEX_FIXTURE = """version = 2
+
+[[package]]
+name = "@burin/alpha"
+description = "First."
+repository = "https://github.com/burin-labs/alpha"
+license = "MIT OR Apache-2.0"
+harn = ">=0.9,<0.10"
+exports = ["default"]
+provenance = "https://github.com/burin-labs/alpha"
+
+[[package.version]]
+version = "0.1.0"
+git = "https://github.com/burin-labs/alpha"
+tag = "v0.1.0"
+rev = "1111111111111111111111111111111111111111"
+package = "alpha-harn"
+provenance = "https://github.com/burin-labs/alpha/releases/tag/v0.1.0"
+
+[[package]]
+name = "@burin/beta"
+description = "Second."
+repository = "https://github.com/burin-labs/beta"
+license = "MIT OR Apache-2.0"
+harn = ">=0.9,<0.10"
+exports = ["default"]
+provenance = "https://github.com/burin-labs/beta"
+
+[[package.version]]
+version = "0.1.0"
+git = "https://github.com/burin-labs/beta"
+tag = "v0.1.0"
+rev = "2222222222222222222222222222222222222222"
+package = "beta-harn"
+provenance = "https://github.com/burin-labs/beta/releases/tag/v0.1.0"
+"""
+  + "\n"
+
+// The same index after recording alpha 0.2.0 and aligning alpha's Harn range.
+// This is the mutation test's expected output, written out in full: a
+// proposal that differs from this by one byte is a different pull request.
+const INDEX_FIXTURE_RECONCILED = """version = 2
+
+[[package]]
+name = "@burin/alpha"
+description = "First."
+repository = "https://github.com/burin-labs/alpha"
+license = "MIT OR Apache-2.0"
+harn = ">=0.10,<0.11"
+exports = ["default"]
+provenance = "https://github.com/burin-labs/alpha"
+
+[[package.version]]
+version = "0.1.0"
+git = "https://github.com/burin-labs/alpha"
+tag = "v0.1.0"
+rev = "1111111111111111111111111111111111111111"
+package = "alpha-harn"
+provenance = "https://github.com/burin-labs/alpha/releases/tag/v0.1.0"
+
+[[package.version]]
+version = "0.2.0"
+git = "https://github.com/burin-labs/alpha"
+tag = "v0.2.0"
+rev = "3333333333333333333333333333333333333333"
+package = "alpha-harn"
+provenance = "https://github.com/burin-labs/alpha/releases/tag/v0.2.0"
+
+[[package]]
+name = "@burin/beta"
+description = "Second."
+repository = "https://github.com/burin-labs/beta"
+license = "MIT OR Apache-2.0"
+harn = ">=0.9,<0.10"
+exports = ["default"]
+provenance = "https://github.com/burin-labs/beta"
+
+[[package.version]]
+version = "0.1.0"
+git = "https://github.com/burin-labs/beta"
+tag = "v0.1.0"
+rev = "2222222222222222222222222222222222222222"
+package = "beta-harn"
+provenance = "https://github.com/burin-labs/beta/releases/tag/v0.1.0"
+"""
+  + "\n"
+
+fn alpha_version_edit(version: string, rev: string) -> VersionEdit {
+  return VersionEdit {
+    package: "@burin/alpha",
+    version: version,
+    tag: "v${version}",
+    rev: rev,
+    block: render_version_block(
+      VersionSpec {
+        repository: "https://github.com/burin-labs/alpha",
+        manifest_package: "alpha-harn",
+        version: version,
+        tag: "v${version}",
+        rev: rev,
+      },
+    ),
+  }
+}
+
+@test
+pipeline test_a_version_record_renders_in_the_index_key_order() {
+  assert(
+    render_version_block(
+      VersionSpec {
+        repository: "https://github.com/burin-labs/alpha",
+        manifest_package: "alpha-harn",
+        version: "0.2.0",
+        tag: "v0.2.0",
+        rev: "3333",
+      },
+    )
+      == "[[package.version]]\nversion = \"0.2.0\"\ngit = \"https://github.com/burin-labs/alpha\"\ntag = \"v0.2.0\"\nrev = \"3333\"\npackage = \"alpha-harn\"\nprovenance = \"https://github.com/burin-labs/alpha/releases/tag/v0.2.0\"",
+  )
+}
+
+@test
+pipeline test_a_package_section_stops_at_the_next_package_header() {
+  const lines = INDEX_FIXTURE.split("\n")
+  const alpha = package_section(lines, "@burin/alpha")
+  assert(alpha != nil)
+  assert(lines[alpha.start].trim() == "[[package]]")
+  assert(lines[alpha.start + 1].trim() == "name = \"@burin/alpha\"")
+  // The section ends at beta's header, not at alpha's first version block.
+  assert(lines[alpha.end].trim() == "[[package]]")
+  assert(lines[alpha.end + 1].trim() == "name = \"@burin/beta\"")
+}
+
+@test
+pipeline test_an_unindexed_package_has_no_section() {
+  assert(package_section(INDEX_FIXTURE.split("\n"), "@burin/missing") == nil)
+}
+
+@test
+pipeline test_a_key_inside_a_version_block_is_never_package_level() {
+  // The bug this pins: `rev` exists in every version record. A package-level
+  // scan that ran past `[[package.version]]` would edit a release record.
+  const lines = INDEX_FIXTURE.split("\n")
+  const alpha = package_section(lines, "@burin/alpha")
+  assert(alpha != nil)
+  assert(package_key_line(lines, alpha, "rev") == -1)
+  assert(package_key_line(lines, alpha, "harn") > alpha.start)
+}
+
+@test
+pipeline test_a_value_split_across_lines_is_not_editable() {
+  const wrapped = """version = 2
+
+[[package]]
+name = "@burin/alpha"
+exports = [
+  "default",
+]
+"""
+  const lines = wrapped.split("\n")
+  const section = package_section(lines, "@burin/alpha")
+  assert(section != nil)
+  assert(single_line_value(lines, section, "exports") == nil)
+  const index_lines = INDEX_FIXTURE.split("\n")
+  const alpha = package_section(index_lines, "@burin/alpha")
+  assert(alpha != nil)
+  assert(single_line_value(index_lines, alpha, "exports") == "[\"default\"]")
+}
+
+@test
+pipeline test_a_proposal_lands_inside_its_own_package() {
+  // The whole mutation: a synthetic drift, applied, compared byte for byte.
+  const reconciled = apply_edits(
+    INDEX_FIXTURE,
+    [alpha_version_edit("0.2.0", "3333333333333333333333333333333333333333")],
+    [
+      MetadataEdit {
+        package: "@burin/alpha",
+        key: "harn",
+        old: ">=0.9,<0.10",
+        new: ">=0.10,<0.11",
+        line: "harn = \">=0.10,<0.11\"",
+      },
+    ],
+  )
+  assert(reconciled == INDEX_FIXTURE_RECONCILED)
+}
+
+@test
+pipeline test_an_empty_proposal_leaves_the_index_untouched() {
+  assert(apply_edits(INDEX_FIXTURE, [], []) == INDEX_FIXTURE)
+  assert(insert_version_blocks(INDEX_FIXTURE, "@burin/alpha", []) == INDEX_FIXTURE)
+}
+
+@test
+pipeline test_records_for_the_last_package_land_before_the_file_ends() {
+  const reconciled = apply_edits(
+    INDEX_FIXTURE,
+    [
+      VersionEdit {
+        package: "@burin/beta",
+        version: "0.2.0",
+        tag: "v0.2.0",
+        rev: "4444",
+        block: render_version_block(
+          VersionSpec {
+            repository: "https://github.com/burin-labs/beta",
+            manifest_package: "beta-harn",
+            version: "0.2.0",
+            tag: "v0.2.0",
+            rev: "4444",
+          },
+        ),
+      },
+    ],
+    [],
+  )
+  assert(
+    reconciled.ends_with(
+      "provenance = \"https://github.com/burin-labs/beta/releases/tag/v0.2.0\"\n",
+    ),
+  )
+  assert(reconciled.contains("rev = \"4444\""))
+  // Beta's new record must not have displaced alpha's table.
+  assert(
+    reconciled.contains(
+      "package = \"alpha-harn\"\nprovenance = \"https://github.com/burin-labs/alpha/releases/tag/v0.1.0\"\n\n[[package]]",
+    ),
+  )
+}
+
+@test
+pipeline test_unrecorded_releases_are_the_v_tags_with_no_record() {
+  const pkg = {
+    name: "@burin/alpha",
+    repository: "https://github.com/burin-labs/alpha",
+    version: [{version: "0.1.0", tag: "v0.1.0", rev: "1111", yanked: false}],
+  }
+  const upstream = [
+    {tag: "v0.1.0", sha: "1111"},
+    {tag: "v0.2.0", sha: "3333"},
+    {tag: "latest", sha: "9999"},
+  ]
+  const unrecorded = unrecorded_releases(pkg, upstream)
+  assert(unrecorded.count == 1)
+  assert(unrecorded[0].tag == "v0.2.0")
+}
+
+@test
+pipeline test_metadata_is_compared_against_the_newest_published_tag() {
+  // Not the newest recorded one: after this run's proposal lands, the newest
+  // record is the release being added, so its manifest is the target.
+  const pkg = {name: "@burin/alpha", version: [{version: "0.1.0", tag: "v0.1.0", yanked: false}]}
+  assert(newest_published_tag(pkg, [{tag: "v0.2.0", sha: "3333"}]) == "v0.2.0")
+  assert(newest_published_tag(pkg, []) == "v0.1.0")
+  assert(newest_published_tag({name: "@burin/x", version: []}, []) == "")
+}
+
+@test
+pipeline test_a_manifest_names_the_package_by_its_manifest_name() {
+  assert(manifest_package_name(CONNECTOR_MANIFEST) == "harn-box-connector")
+  assert(manifest_package_name("[exports]\nname = \"not-the-package\"\n") == nil)
+}
+
+@test
+pipeline test_records_sort_ascending_regardless_of_discovery_order() {
+  const sorted = sort_version_edits(
+    [alpha_version_edit("0.10.0", "a"), alpha_version_edit("0.9.0", "b")],
+  )
+  assert(sorted[0].version == "0.9.0")
+  assert(sorted[1].version == "0.10.0")
+}
+
+@test
+pipeline test_the_title_names_the_package_and_the_release_range() {
+  assert(
+    render_title([alpha_version_edit("0.2.0", "a")], [])
+      == "fix(index): record @burin/alpha 0.2.0",
+  )
+  assert(
+    render_title([alpha_version_edit("0.4.0", "a"), alpha_version_edit("0.2.0", "b")], [])
+      == "fix(index): record @burin/alpha 0.2.0 through 0.4.0",
+  )
+  assert(
+    render_title(
+      [],
+      [
+        MetadataEdit {
+          package: "@burin/alpha",
+          key: "harn",
+          old: "a",
+          new: "b",
+          line: "harn = \"b\"",
+        },
+      ],
+    )
+      == "fix(index): align @burin/alpha metadata with its manifest",
+  )
+}
+
+@test
+pipeline test_distinct_packages_preserve_discovery_order_without_repeats() {
+  const names = distinct_packages(
+    [alpha_version_edit("0.2.0", "a"), alpha_version_edit("0.3.0", "b")],
+    [MetadataEdit {package: "@burin/beta", key: "harn", old: "a", new: "b", line: "harn = \"b\""}],
+  )
+  assert(names.count == 2)
+  assert(names[0] == "@burin/alpha")
+  assert(names[1] == "@burin/beta")
+}
+
+@test
+pipeline test_the_body_carries_the_evidence_for_every_edit() {
+  const body = render_body(
+    [alpha_version_edit("0.2.0", "3333333333333333333333333333333333333333")],
+    [
+      MetadataEdit {
+        package: "@burin/alpha",
+        key: "harn",
+        old: ">=0.9,<0.10",
+        new: ">=0.10,<0.11",
+        line: "harn = \">=0.10,<0.11\"",
+      },
+    ],
+    [],
+    "https://github.com/burin-labs/harn-packages/actions/runs/1",
+  )
+  assert(
+    body.contains(
+      "- `@burin/alpha` 0.2.0, from tag `v0.2.0` at `3333333333333333333333333333333333333333`",
+    ),
+  )
+  assert(body.contains("- `@burin/alpha` `harn`: `>=0.9,<0.10` becomes `>=0.10,<0.11`"))
+  assert(body.contains("https://github.com/burin-labs/harn-packages/actions/runs/1"))
+  assert(body.contains("harn-github-connector/issues/289"))
+  // Nothing was left for a human, so the body must not claim otherwise.
+  assert(!body.contains("could not correct"))
+}
+
+@test
+pipeline test_the_body_separates_findings_that_need_a_decision() {
+  const body = render_body(
+    [],
+    [],
+    [
+      {
+        package: "@burin/alpha",
+        kind: "rev_mismatch",
+        detail: "0.1.0 pins rev 1111 but tag v0.1.0 now resolves to 5555",
+        proposed: false,
+      },
+    ],
+    "",
+  )
+  assert(body.contains("## Findings this run could not correct"))
+  assert(body.contains("[rev_mismatch] `@burin/alpha`"))
+  assert(!body.contains("Produced by"))
 }
