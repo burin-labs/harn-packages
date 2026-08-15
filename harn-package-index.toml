@@ -131,8 +131,8 @@ name = "@burin/github-connector"
 description = "Pure-Harn GitHub App connector: webhooks, installation token rotation, REST/GraphQL dispatch."
 repository = "https://github.com/burin-labs/harn-github-connector"
 license = "MIT OR Apache-2.0"
-harn = ">=0.8,<0.9"
-exports = ["default"]
+harn = ">=0.10.53,<0.11"
+exports = ["default", "worktree", "publish"]
 connector_contract = "v1"
 docs_url = "https://docs.harnlang.com/connectors/github.html"
 provenance = "https://github.com/burin-labs/harn-github-connector"
@@ -152,6 +152,118 @@ tag = "v0.3.0"
 rev = "673bf2ab3885ee189e8b230352cb6625f501afa2"
 package = "harn-github-connector"
 provenance = "https://github.com/burin-labs/harn-github-connector/releases/tag/v0.3.0"
+
+[[package.version]]
+version = "0.4.0"
+git = "https://github.com/burin-labs/harn-github-connector"
+tag = "v0.4.0"
+rev = "a5f06874e54fc9814420e2f6619b25738ec9babd"
+package = "harn-github-connector"
+provenance = "https://github.com/burin-labs/harn-github-connector/releases/tag/v0.4.0"
+
+[[package.version]]
+version = "0.5.0"
+git = "https://github.com/burin-labs/harn-github-connector"
+tag = "v0.5.0"
+rev = "6c6aede47e12737474e78a4908cc25320e1320a5"
+package = "harn-github-connector"
+provenance = "https://github.com/burin-labs/harn-github-connector/releases/tag/v0.5.0"
+
+[[package.version]]
+version = "0.6.0"
+git = "https://github.com/burin-labs/harn-github-connector"
+tag = "v0.6.0"
+rev = "0b9ef4a99d65dac7522e7c388653952d0cc1ade8"
+package = "harn-github-connector"
+provenance = "https://github.com/burin-labs/harn-github-connector/releases/tag/v0.6.0"
+
+[[package.version]]
+version = "0.6.2"
+git = "https://github.com/burin-labs/harn-github-connector"
+tag = "v0.6.2"
+rev = "91ff234af426e7ff02146898a1f5884d9e49bbc6"
+package = "harn-github-connector"
+provenance = "https://github.com/burin-labs/harn-github-connector/releases/tag/v0.6.2"
+
+[[package.version]]
+version = "0.6.3"
+git = "https://github.com/burin-labs/harn-github-connector"
+tag = "v0.6.3"
+rev = "90a77ba2e0186c87fe1074f13fef31d202ba9b38"
+package = "harn-github-connector"
+provenance = "https://github.com/burin-labs/harn-github-connector/releases/tag/v0.6.3"
+
+[[package.version]]
+version = "0.6.4"
+git = "https://github.com/burin-labs/harn-github-connector"
+tag = "v0.6.4"
+rev = "72d4ed366b2ca2803eea2c668a9f44041c982dd2"
+package = "harn-github-connector"
+provenance = "https://github.com/burin-labs/harn-github-connector/releases/tag/v0.6.4"
+
+[[package.version]]
+version = "0.6.5"
+git = "https://github.com/burin-labs/harn-github-connector"
+tag = "v0.6.5"
+rev = "5a7983206b06ba9fd51c6d32fd9c312a2cd0f00c"
+package = "harn-github-connector"
+provenance = "https://github.com/burin-labs/harn-github-connector/releases/tag/v0.6.5"
+
+[[package.version]]
+version = "0.6.6"
+git = "https://github.com/burin-labs/harn-github-connector"
+tag = "v0.6.6"
+rev = "9f88e2669e43d39544277d4a9a5dff29016bf1b4"
+package = "harn-github-connector"
+provenance = "https://github.com/burin-labs/harn-github-connector/releases/tag/v0.6.6"
+
+[[package.version]]
+version = "0.6.8"
+git = "https://github.com/burin-labs/harn-github-connector"
+tag = "v0.6.8"
+rev = "b3b8d3abee4a087e55ed83b85e3fc09c928c7b81"
+package = "harn-github-connector"
+provenance = "https://github.com/burin-labs/harn-github-connector/releases/tag/v0.6.8"
+
+[[package.version]]
+version = "0.7.0"
+git = "https://github.com/burin-labs/harn-github-connector"
+tag = "v0.7.0"
+rev = "4a27dd5a38657a8a376fb4040598a9b12e1d882d"
+package = "harn-github-connector"
+provenance = "https://github.com/burin-labs/harn-github-connector/releases/tag/v0.7.0"
+
+[[package.version]]
+version = "0.8.0"
+git = "https://github.com/burin-labs/harn-github-connector"
+tag = "v0.8.0"
+rev = "1b6926ef7179a811db8f7cbcd24f182128e61578"
+package = "harn-github-connector"
+provenance = "https://github.com/burin-labs/harn-github-connector/releases/tag/v0.8.0"
+
+[[package.version]]
+version = "0.8.1"
+git = "https://github.com/burin-labs/harn-github-connector"
+tag = "v0.8.1"
+rev = "a98051c7c18032c3e25be7694993cc8c1f4aa32b"
+package = "harn-github-connector"
+provenance = "https://github.com/burin-labs/harn-github-connector/releases/tag/v0.8.1"
+
+[[package.version]]
+version = "0.8.2"
+git = "https://github.com/burin-labs/harn-github-connector"
+tag = "v0.8.2"
+rev = "1d34f4610c24bd65e9055e5957032162c1ed1681"
+package = "harn-github-connector"
+provenance = "https://github.com/burin-labs/harn-github-connector/releases/tag/v0.8.2"
+
+[[package.version]]
+version = "0.8.3"
+git = "https://github.com/burin-labs/harn-github-connector"
+tag = "v0.8.3"
+rev = "d5f2615ed155e4f69015fc19aec960793fb2f7a3"
+package = "harn-github-connector"
+provenance = "https://github.com/burin-labs/harn-github-connector/releases/tag/v0.8.3"
 
 [[package]]
 name = "@burin/slack-connector"
