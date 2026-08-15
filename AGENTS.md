@@ -29,6 +29,32 @@ harn package registry verify harn-package-index.toml --remote
 The verifier owns registry-v2 structure, uniqueness, provenance/repository
 coherence, immutable tag/commit identity, and remote tag resolution.
 
+## Reconciliation
+
+The verifier proves the index is internally consistent and that every recorded
+tag resolves. It cannot know about a release that was never written down.
+Nothing else closes that gap — `harn publish` is author-invoked and is wired
+into no release pipeline — so `reconcile-index.harn` is the observer:
+
+```sh
+harn run --allow-process-network reconcile-index.harn
+```
+
+It reads the index through `harn package search --json` rather than parsing
+TOML itself, then compares every package against `git ls-remote` and the
+published `harn.toml`. It reports four kinds of drift and exits non-zero on
+any of them:
+
+- `unrecorded_release` — an upstream `v*` tag with no version record.
+- `rev_mismatch` — a record whose `rev` is no longer what its tag resolves to.
+- `missing_upstream_tag` — a record naming a tag that no longer exists.
+- `metadata_drift` — package-level `harn` or `exports` disagreeing with the
+  manifest at the newest non-yanked record.
+
+The `Reconcile index` workflow runs it daily and on demand. It only reports;
+fixing drift is still a reviewed index edit. Cover changes to it with
+`harn test reconcile-index.test.harn`, which runs on every pull request.
+
 ## Pages
 
 Merges to `main` publish only `harn-package-index.toml`, `CNAME`, and

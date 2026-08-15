@@ -1,0 +1,4 @@
+# Harn runtime scratch, created by `harn run` / `harn test` in this checkout.
+.harn/
+reconcile-index.log
+registry-verification.json
