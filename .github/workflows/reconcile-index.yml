@@ -37,17 +37,29 @@ jobs:
       - name: Install pinned Harn
         uses: burin-labs/harn/.github/actions/setup-harn@c86406a580b5a733a129a0c232e6d319a1745f23
 
+      - name: Describe the runner resolver
+        shell: bash
+        run: |
+          set -uo pipefail
+          # Diagnostic only. On Ubuntu runners /etc/resolv.conf is a symlink
+          # into /run, so granting /etc alone leaves the referent unreadable.
+          ls -l /etc/resolv.conf || true
+          readlink -f /etc/resolv.conf || true
+
       - name: Reconcile index against upstream tags
         shell: bash
         run: |
           # pipefail matters here: without it `tee` would mask a drift exit
           # code and this gate would pass while reporting drift.
           set -euo pipefail
-          # `--sandbox-read-root /etc` is what makes DNS work: the filesystem
-          # jail otherwise hides /etc/resolv.conf and /etc/ssl, so git resolves
-          # nothing and every ls-remote fails with "Could not resolve host".
-          # Read-only, subprocess-only, and narrower than --no-sandbox.
-          harn run --allow-process-network --sandbox-read-root /etc \
+          # DNS needs both roots: /etc for resolv.conf and the CA bundle, and
+          # /run because resolv.conf is a symlink into systemd-resolved's stub
+          # directory. Granting /etc alone yields the link but not its
+          # referent, which still fails as "Could not resolve host".
+          # Both are read-only and subprocess-only; the worktree write jail
+          # and the process sandbox stay on.
+          harn run --allow-process-network \
+            --sandbox-read-root /etc --sandbox-read-root /run \
             reconcile-index.harn 2>&1 | tee reconcile-index.log
 
       - name: Upload reconcile log
