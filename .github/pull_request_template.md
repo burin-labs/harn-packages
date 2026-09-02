@@ -1,3 +1,9 @@
+<!--
+Title this pull request `[Area] Sentence case description`.
+Areas: Index, CI, Docs, Pages.
+Example: [Index] Record @burin/github-connector 0.8.7
+-->
+
 ## Description
 
 <!--
