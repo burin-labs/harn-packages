@@ -688,14 +688,14 @@ fn check_recorded_tags(pkg: dict, upstream: list) -> TagCheck {
     if found == nil {
       findings = findings
         + [
-        Finding {
-          package: pkg.name,
-          kind: "missing_upstream_tag",
-          detail:
-            "${record.version} records tag ${record.tag}, which does not exist in ${pkg.repository}",
-          proposed: false,
-        },
-      ]
+          Finding {
+            package: pkg.name,
+            kind: "missing_upstream_tag",
+            detail:
+              "${record.version} records tag ${record.tag}, which does not exist in ${pkg.repository}",
+            proposed: false,
+          },
+        ]
       continue
     }
     checked = checked + 1
@@ -705,14 +705,14 @@ fn check_recorded_tags(pkg: dict, upstream: list) -> TagCheck {
       // it would launder that away.
       findings = findings
         + [
-        Finding {
-          package: pkg.name,
-          kind: "rev_mismatch",
-          detail:
-            "${record.version} pins rev ${record.rev} but tag ${record.tag} now resolves to ${found.sha}",
-          proposed: false,
-        },
-      ]
+          Finding {
+            package: pkg.name,
+            kind: "rev_mismatch",
+            detail:
+              "${record.version} pins rev ${record.rev} but tag ${record.tag} now resolves to ${found.sha}",
+            proposed: false,
+          },
+        ]
     }
   }
   return TagCheck {findings: findings, checked: checked}
@@ -774,33 +774,33 @@ fn version_proposals(pkg: dict, unrecorded: list, manifest_package: string) -> E
     if manifest_package != "" {
       edits = edits
         + [
-        VersionEdit {
-          package: pkg.name,
-          version: version,
-          tag: entry.tag,
-          rev: entry.sha,
-          block: render_version_block(
-            VersionSpec {
-              repository: pkg.repository,
-              manifest_package: manifest_package,
-              version: version,
-              tag: entry.tag,
-              rev: entry.sha,
-            },
-          ),
-        },
-      ]
+          VersionEdit {
+            package: pkg.name,
+            version: version,
+            tag: entry.tag,
+            rev: entry.sha,
+            block: render_version_block(
+              VersionSpec {
+                repository: pkg.repository,
+                manifest_package: manifest_package,
+                version: version,
+                tag: entry.tag,
+                rev: entry.sha,
+              },
+            ),
+          },
+        ]
     }
     findings = findings
       + [
-      Finding {
-        package: pkg.name,
-        kind: "unrecorded_release",
-        detail:
-          "${pkg.repository} published ${entry.tag} (${entry.sha}) but the index has no ${version} record",
-        proposed: manifest_package != "",
-      },
-    ]
+        Finding {
+          package: pkg.name,
+          kind: "unrecorded_release",
+          detail:
+            "${pkg.repository} published ${entry.tag} (${entry.sha}) but the index has no ${version} record",
+          proposed: manifest_package != "",
+        },
+      ]
   }
   return EditSet {findings: findings, version_edits: edits, metadata_edits: []}
 }
@@ -820,25 +820,25 @@ fn metadata_proposals(pkg: dict, manifest: string, tag: string, index_lines: lis
     if editable {
       edits = edits
         + [
-        MetadataEdit {
-          package: pkg.name,
-          key: "harn",
-          old: pkg.harn,
-          new: declared_harn,
-          line: "harn = \"${declared_harn}\"",
-        },
-      ]
+          MetadataEdit {
+            package: pkg.name,
+            key: "harn",
+            old: pkg.harn,
+            new: declared_harn,
+            line: "harn = \"${declared_harn}\"",
+          },
+        ]
     }
     findings = findings
       + [
-      Finding {
-        package: pkg.name,
-        kind: "metadata_drift",
-        detail:
-          "index harn = \"${pkg.harn}\" but harn.toml at ${tag} declares harn = \"${declared_harn}\"",
-        proposed: editable,
-      },
-    ]
+        Finding {
+          package: pkg.name,
+          kind: "metadata_drift",
+          detail:
+            "index harn = \"${pkg.harn}\" but harn.toml at ${tag} declares harn = \"${declared_harn}\"",
+          proposed: editable,
+        },
+      ]
   }
   const declared_exports = manifest_exports(manifest)
   if declared_exports != nil && !same_names(declared_exports, pkg.exports) {
@@ -846,25 +846,25 @@ fn metadata_proposals(pkg: dict, manifest: string, tag: string, index_lines: lis
     if editable {
       edits = edits
         + [
-        MetadataEdit {
-          package: pkg.name,
-          key: "exports",
-          old: render_names(pkg.exports),
-          new: render_names(declared_exports),
-          line: "exports = ${render_names(declared_exports)}",
-        },
-      ]
+          MetadataEdit {
+            package: pkg.name,
+            key: "exports",
+            old: render_names(pkg.exports),
+            new: render_names(declared_exports),
+            line: "exports = ${render_names(declared_exports)}",
+          },
+        ]
     }
     findings = findings
       + [
-      Finding {
-        package: pkg.name,
-        kind: "metadata_drift",
-        detail:
-          "index exports = ${render_names(pkg.exports)} but harn.toml at ${tag} declares exports = ${render_names(declared_exports)}",
-        proposed: editable,
-      },
-    ]
+        Finding {
+          package: pkg.name,
+          kind: "metadata_drift",
+          detail:
+            "index exports = ${render_names(pkg.exports)} but harn.toml at ${tag} declares exports = ${render_names(declared_exports)}",
+          proposed: editable,
+        },
+      ]
   }
   return EditSet {findings: findings, version_edits: [], metadata_edits: edits}
 }
@@ -889,14 +889,14 @@ fn reconcile_package(process: HarnessProcess, pkg: dict, index_lines: list) -> P
     if tag != "" {
       findings = findings
         + [
-        Finding {
-          package: pkg.name,
-          kind: "manifest_unreadable",
-          detail:
-            "could not read harn.toml at ${tag} from ${pkg.repository}; metadata was not checked",
-          proposed: false,
-        },
-      ]
+          Finding {
+            package: pkg.name,
+            kind: "manifest_unreadable",
+            detail:
+              "could not read harn.toml at ${tag} from ${pkg.repository}; metadata was not checked",
+            proposed: false,
+          },
+        ]
     }
     const unreadable = version_proposals(pkg, unrecorded, "")
     return PackageResult {
