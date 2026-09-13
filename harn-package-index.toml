@@ -139,7 +139,7 @@ name = "@burin/github-connector"
 description = "Pure-Harn GitHub App connector: webhooks, installation token rotation, REST/GraphQL dispatch."
 repository = "https://github.com/burin-labs/harn-github-connector"
 license = "MIT OR Apache-2.0"
-harn = ">=0.10.53,<0.11"
+harn = ">=0.10.135,<0.11"
 exports = ["default", "worktree", "publish"]
 connector_contract = "v1"
 docs_url = "https://docs.harnlang.com/connectors/github.html"
@@ -312,6 +312,14 @@ tag = "v0.8.7"
 rev = "14f690729090c4b66185df40d2bdf50e3ca6fa27"
 package = "harn-github-connector"
 provenance = "https://github.com/burin-labs/harn-github-connector/releases/tag/v0.8.7"
+
+[[package.version]]
+version = "0.8.8"
+git = "https://github.com/burin-labs/harn-github-connector"
+tag = "v0.8.8"
+rev = "9b9d830eed609a9cc64664c6d1de39a4c9437793"
+package = "harn-github-connector"
+provenance = "https://github.com/burin-labs/harn-github-connector/releases/tag/v0.8.8"
 
 [[package]]
 name = "@burin/slack-connector"
