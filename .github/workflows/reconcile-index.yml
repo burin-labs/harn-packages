@@ -61,7 +61,7 @@ jobs:
           persist-credentials: false
 
       - name: Install pinned Harn
-        uses: burin-labs/harn/.github/actions/setup-harn@11681af676a5e4dc4200cfee683150cdec26763f
+        uses: burin-labs/harn/.github/actions/setup-harn@f0839221164d965ef33cbe1512075b630993eb5c
 
       - name: Describe the runner resolver
         shell: bash
