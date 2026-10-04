@@ -27,40 +27,6 @@ package = "harn-openapi"
 provenance = "https://github.com/burin-labs/harn-openapi/releases/tag/v0.1.1-rc.2"
 
 [[package]]
-name = "@burin/notion-sdk"
-description = "Typed Notion REST API SDK in pure Harn, generated via harn-openapi."
-repository = "https://github.com/burin-labs/notion-sdk-harn"
-license = "MIT OR Apache-2.0"
-harn = ">=0.10,<0.11"
-exports = ["default", "helpers"]
-docs_url = "https://github.com/burin-labs/notion-sdk-harn#readme"
-provenance = "https://github.com/burin-labs/notion-sdk-harn"
-
-[[package.version]]
-version = "0.1.0"
-git = "https://github.com/burin-labs/notion-sdk-harn"
-tag = "v0.1.0"
-rev = "bad580c5fbe8ede612b2748ad98606642ce2fc02"
-package = "notion-sdk-harn"
-provenance = "https://github.com/burin-labs/notion-sdk-harn/releases/tag/v0.1.0"
-
-[[package.version]]
-version = "0.1.1"
-git = "https://github.com/burin-labs/notion-sdk-harn"
-tag = "v0.1.1"
-rev = "f94d602557a6aae5a69a294a982333eedc7d5dc2"
-package = "notion-sdk-harn"
-provenance = "https://github.com/burin-labs/notion-sdk-harn/releases/tag/v0.1.1"
-
-[[package.version]]
-version = "0.2.0"
-git = "https://github.com/burin-labs/notion-sdk-harn"
-tag = "v0.2.0"
-rev = "4b4219a9b3b355b24dff842220854e8df3c2f061"
-package = "notion-sdk-harn"
-provenance = "https://github.com/burin-labs/notion-sdk-harn/releases/tag/v0.2.0"
-
-[[package]]
 name = "@burin/documents"
 description = "Deterministic document report helpers and file artifact references for Harn agents."
 repository = "https://github.com/burin-labs/harn-documents"
@@ -383,33 +349,6 @@ rev = "e2ce26549dd062006781f67fb4a4c31579eaac07"
 package = "harn-linear-connector"
 provenance = "https://github.com/burin-labs/harn-linear-connector/releases/tag/v0.1.0"
 yanked = true
-
-[[package]]
-name = "@burin/notion-connector"
-description = "Pure-Harn Notion connector: webhooks, polling, artifact helpers, and outbound API dispatch."
-repository = "https://github.com/burin-labs/harn-notion-connector"
-license = "MIT OR Apache-2.0"
-harn = ">=0.9,<0.10"
-exports = ["default"]
-connector_contract = "v1"
-docs_url = "https://github.com/burin-labs/harn-notion-connector#readme"
-provenance = "https://github.com/burin-labs/harn-notion-connector/releases/tag/v0.1.1"
-
-[[package.version]]
-version = "0.1.1"
-git = "https://github.com/burin-labs/harn-notion-connector"
-tag = "v0.1.1"
-rev = "b7b73ba2015d90617fda45e45b3e0907838e4380"
-package = "harn-notion-connector"
-provenance = "https://github.com/burin-labs/harn-notion-connector/releases/tag/v0.1.1"
-
-[[package.version]]
-version = "0.1.0"
-git = "https://github.com/burin-labs/harn-notion-connector"
-tag = "v0.1.0"
-rev = "0d8e14c404fe097f4005a3883617958cd01d1496"
-package = "harn-notion-connector"
-provenance = "https://github.com/burin-labs/harn-notion-connector/releases/tag/v0.1.0"
 
 [[package]]
 name = "@burin/google-workspace-connector"
