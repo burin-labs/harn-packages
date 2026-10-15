@@ -335,6 +335,14 @@ rev = "1bbb9db604be535b8a625aaa645367d3f92e0648"
 package = "harn-github-connector"
 provenance = "https://github.com/burin-labs/harn-github-connector/releases/tag/v0.11.1"
 
+[[package.version]]
+version = "0.12.0"
+git = "https://github.com/burin-labs/harn-github-connector"
+tag = "v0.12.0"
+rev = "e27cbeb54c325e06724f9b314af3acf820f04f41"
+package = "harn-github-connector"
+provenance = "https://github.com/burin-labs/harn-github-connector/releases/tag/v0.12.0"
+
 [[package]]
 name = "@burin/slack-connector"
 description = "Pure-Harn Slack connector: Events API, Socket Mode, Web API dispatch, and file artifact helpers."
