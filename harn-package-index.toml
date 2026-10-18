@@ -619,3 +619,20 @@ tag = "v0.1.0"
 rev = "3b1a0fb7684260e3a05bbbd730111d3be502d435"
 package = "harn-svn-connector"
 provenance = "https://github.com/burin-labs/harn-svn-connector/releases/tag/v0.1.0"
+
+[[package]]
+name = "@burin/gitlab-connector"
+description = "Pure-Harn GitLab connector: webhooks, OAuth2 + PAT auth, REST/GraphQL dispatch."
+repository = "https://github.com/burin-labs/harn-gitlab-connector"
+license = "MIT OR Apache-2.0"
+harn = ">=0.10.135,<0.11"
+exports = ["default"]
+provenance = "https://github.com/burin-labs/harn-gitlab-connector"
+
+[[package.version]]
+version = "0.2.0"
+git = "https://github.com/burin-labs/harn-gitlab-connector"
+tag = "v0.2.0"
+rev = "859de6b34541e63eb05bef8f06ec520cf6681fa1"
+package = "harn-gitlab-connector"
+provenance = "https://github.com/burin-labs/harn-gitlab-connector/releases/tag/v0.2.0"
