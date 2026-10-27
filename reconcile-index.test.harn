@@ -16,6 +16,7 @@ import {
   newest_recorded,
   package_key_line,
   package_section,
+  parse_remote_tags,
   render_body,
   render_title,
   render_version_block,
@@ -131,6 +132,18 @@ pipeline test_peeled_tag_shas_replace_the_annotated_object() {
   const found = find_tag(tags, "v0.1.0")
   assert(found != nil)
   assert(found.sha == "commit111111111111111111111111111111111")
+}
+
+@test
+pipeline test_remote_tag_output_keeps_lightweight_and_peeled_commits() {
+  const tags = parse_remote_tags(
+    "object\trefs/tags/v0.1.0\ncommit\trefs/tags/v0.1.0^{}\nlight\trefs/tags/v0.2.0\n"
+      + "malformed\nother\trefs/heads/main\n",
+  )
+  assert_eq(find_tag(tags, "v0.1.0")?.sha, "commit")
+  assert_eq(find_tag(tags, "v0.2.0")?.sha, "light")
+  assert_eq(tags.count, 2)
+  assert_eq(find_tag(tags, "main"), nil)
 }
 
 @test
@@ -286,11 +299,11 @@ pipeline test_a_package_section_stops_at_the_next_package_header() {
   const lines = INDEX_FIXTURE.split("\n")
   const alpha = package_section(lines, "@burin/alpha")
   assert(alpha != nil)
-  assert(lines[alpha.start].trim() == "[[package]]")
-  assert(lines[alpha.start + 1].trim() == "name = \"@burin/alpha\"")
+  assert(lines[alpha.start]?.trim() == "[[package]]")
+  assert(lines[alpha.start + 1]?.trim() == "name = \"@burin/alpha\"")
   // The section ends at beta's header, not at alpha's first version block.
-  assert(lines[alpha.end].trim() == "[[package]]")
-  assert(lines[alpha.end + 1].trim() == "name = \"@burin/beta\"")
+  assert(lines[alpha.end]?.trim() == "[[package]]")
+  assert(lines[alpha.end + 1]?.trim() == "name = \"@burin/beta\"")
 }
 
 @test

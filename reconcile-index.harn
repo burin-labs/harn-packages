@@ -89,8 +89,13 @@ fn ls_remote_tags(process: HarnessProcess, repository: string) -> list {
   if result.exit_code != 0 {
     throw "git ls-remote failed for ${repository} (exit ${result.exit_code}): ${result.stderr}"
   }
+  return parse_remote_tags(result.stdout)
+}
+
+/** Parse the `git ls-remote --tags` output, preferring peeled tag objects. */
+pub fn parse_remote_tags(output: string) -> list {
   let resolved: list = []
-  for line in result.stdout.split("\n") {
+  for line in output.split("\n") {
     const trimmed = line.trim()
     if trimmed == "" {
       continue
@@ -99,9 +104,9 @@ fn ls_remote_tags(process: HarnessProcess, repository: string) -> list {
     if parts.count < 2 {
       continue
     }
-    const sha = parts[0]
-    const ref = parts[1]
-    if !ref.starts_with(TAG_PREFIX) {
+    const sha = parts[0] ?? ""
+    const ref = parts[1] ?? ""
+    if sha == "" || !ref.starts_with(TAG_PREFIX) {
       continue
     }
     const name = substring(ref, TAG_PREFIX.count, ref.count)
@@ -479,7 +484,14 @@ pub fn insert_version_blocks(index_text: string, package_name: string, blocks: l
     throw "cannot record ${package_name}: no [[package]] table in ${INDEX_PATH}"
   }
   let at = section.end
-  while at > section.start && lines[at - 1].trim() == "" {
+  while at > section.start {
+    const previous = lines[at - 1]
+    if previous == nil {
+      throw "cannot record ${package_name}: package section extends beyond ${INDEX_PATH}"
+    }
+    if previous.trim() != "" {
+      break
+    }
     at = at - 1
   }
   let out: list = []
