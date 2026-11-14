@@ -24,6 +24,7 @@ jobs:
     with:
       orchestration-sha: 5584191b5e34eaa945d36206a844a54fc565b301
       version: ${{ inputs.version }}
+      pr-title: "[CI] Bump Harn runtime"
       # The index has no harn.toml and no generated sources. The bump's version-file
       # write is the whole refresh, so the inherited package install must not run.
       refresh-command: test -f harn-package-index.toml
@@ -32,6 +33,7 @@ jobs:
         harn package registry verify harn-package-index.toml
         harn test reconcile-index.test.harn
         bash -n scripts/propose-index-drift.sh
+      test-inventory-mode: repository-validation
       publish-failure-for-repair: true
       apply-behavior-preserving-fixes: true
       behavior-preserving-fix-exclude-codes: "HARN-LNT-051"
